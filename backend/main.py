@@ -1,6 +1,7 @@
 import datetime
 import os
 import time
+from contextlib import asynccontextmanager
 from collections import defaultdict, deque
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from decimal import Decimal
@@ -13,7 +14,7 @@ from pydantic import BaseModel, Field, field_validator, condecimal
 from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from database import get_db
+from database import SessionLocal, get_db
 import models
 import json
 from providers import PlacesProviderUnavailable, get_places_provider
@@ -54,23 +55,6 @@ def seed_group_catalog(db: Session):
     db.commit()
 
 
-def seed_community_posts(db: Session):
-    count = db.query(models.CommunityPost).count()
-    if count == 0:
-        print("No community posts yet — users can create their own.")
-
-    disc_count = db.query(models.Discussion).count()
-    if disc_count == 0:
-        print("No discussion threads yet — users can start their own conversations.")
-
-from database import SessionLocal
-_db = SessionLocal()
-try:
-    seed_group_catalog(_db)
-    seed_community_posts(_db)
-finally:
-    _db.close()
-
 #Import functions from auth.py
 from auth import (
     register_user,
@@ -83,7 +67,19 @@ from auth import (
     delete_user
 )
 
-app = FastAPI(title="Hackathon API")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Seed reference rows after Alembic has created the application schema."""
+    db = SessionLocal()
+    try:
+        seed_group_catalog(db)
+    finally:
+        db.close()
+    yield
+
+
+app = FastAPI(title="Hackathon API", lifespan=lifespan)
+
 _rate_limit_events = defaultdict(deque)
 _upload_owners = {}
 _rate_limits = {

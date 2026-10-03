@@ -127,9 +127,6 @@ def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
             return dict(row)
         return None
 
-#Initialize the database on module load
-init_db()
-
 def reset_user_password(username: str, new_password: str) -> bool:
     """Updates a user's password in the database."""
     hashed_password = get_password_hash(new_password)

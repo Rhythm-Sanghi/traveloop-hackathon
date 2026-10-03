@@ -1,10 +1,11 @@
 from logging.config import fileConfig
 import os
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, inspect, pool, text
 
 from database import SQLALCHEMY_DATABASE_URL
 import models
+from migrations.version_table import VERSION_TABLE_MAX_LENGTH
 
 config = context.config
 config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL", SQLALCHEMY_DATABASE_URL).replace("%", "%%"))
@@ -12,6 +13,33 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = models.Base.metadata
+
+
+def ensure_version_table_capacity(connection):
+    """Ensure PostgreSQL can store all current and future revision identifiers."""
+    if connection.dialect.name != "postgresql":
+        return
+
+    inspector = inspect(connection)
+    if not inspector.has_table("alembic_version"):
+        connection.execute(text(
+            "CREATE TABLE alembic_version ("
+            f"version_num VARCHAR({VERSION_TABLE_MAX_LENGTH}) NOT NULL PRIMARY KEY"
+            ")"
+        ))
+        return
+
+    version_column = next(
+        column for column in inspector.get_columns("alembic_version")
+        if column["name"] == "version_num"
+    )
+    current_length = getattr(version_column["type"], "length", None)
+    if current_length is None or current_length < VERSION_TABLE_MAX_LENGTH:
+        connection.execute(text(
+            "ALTER TABLE alembic_version "
+            f"ALTER COLUMN version_num TYPE VARCHAR({VERSION_TABLE_MAX_LENGTH})"
+        ))
+
 
 def include_object(object_, name, type_, reflected, compare_to):
     # The legacy auth module owns the existing SQLite users table shape.
@@ -55,6 +83,7 @@ def run_migrations_online():
             include_object=include_object,
             include_name=include_name,
         )
+        ensure_version_table_capacity(connection)
         with context.begin_transaction():
             context.run_migrations()
 
