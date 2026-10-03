@@ -1,11 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Compass,
   MapPin,
-  Calendar,
   DollarSign,
-  FileText,
   Trash2,
   Plus,
   ChevronUp,
@@ -15,9 +13,10 @@ import {
   Loader2,
   X,
   Wallet,
-  Banknote,
+  Download,
 } from 'lucide-react';
 import api from '../api';
+import Navbar from '../components/Navbar';
 
 export default function ItineraryBuilder() {
   const { tripId } = useParams();
@@ -25,10 +24,11 @@ export default function ItineraryBuilder() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [showSaveIndicator, setShowSaveIndicator] = useState(false);
+  const [tripVersion, setTripVersion] = useState(null);
+  const [, setShowSaveIndicator] = useState(false);
   const [tripName, setTripName] = useState('');
-  const [tripLoading, setTripLoading] = useState(true);
-  const [initialLoading, setInitialLoading] = useState(true);
+  const [, setTripLoading] = useState(true);
+  const [, setInitialLoading] = useState(true);
 
   // Initialize with one empty stop
   const [stops, setStops] = useState([
@@ -74,6 +74,7 @@ export default function ItineraryBuilder() {
 
         // Fetch itinerary (stops)
         const itineraryResponse = await api.get(`/api/trips/${tripId}/itinerary`);
+        setTripVersion(itineraryResponse.data?.version ?? 1);
         
         if (itineraryResponse.data && itineraryResponse.data.stops && itineraryResponse.data.stops.length > 0) {
           // Transform backend format to frontend format
@@ -82,6 +83,7 @@ export default function ItineraryBuilder() {
             city: stop.city_name || '',
             arrivalDate: stop.arrival_date || '',
             departureDate: stop.departure_date || '',
+            timezone: stop.timezone || '',
             budget: stop.budget ? stop.budget.toString() : '',
             description: stop.notes || '',
             // Handle both legacy string activities and new object activities
@@ -108,6 +110,86 @@ export default function ItineraryBuilder() {
       fetchTripAndItinerary();
     }
   }, [tripId]);
+
+  const handleExportPDF = () => {
+    const printWindow = window.open('', '_blank');
+    const stopsHtml = stops.map((stop, index) => `
+      <div style="margin-bottom: 30px; page-break-inside: avoid; border-bottom: 1px solid #eee; padding-bottom: 20px;">
+        <h2 style="margin: 0 0 10px 0; color: #3b82f6; font-family: sans-serif; font-size: 20px; text-transform: uppercase; letter-spacing: 1px;">
+          Stop ${index + 1}: ${stop.city || 'Unnamed Stop'}
+        </h2>
+        <p style="margin: 0 0 15px 0; color: #64748b; font-size: 13px; font-family: sans-serif; font-weight: bold;">
+          Arrival: ${stop.arrivalDate || 'TBD'} | Departure: ${stop.departureDate || 'TBD'}
+        </p>
+        ${stop.description ? `<p style="margin: 0 0 15px 0; color: #334155; font-size: 14px; font-family: sans-serif; line-height: 1.6;">${stop.description}</p>` : ''}
+        
+        <h3 style="margin: 15px 0 10px 0; color: #0f172a; font-family: sans-serif; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">Planned Activities</h3>
+        <table style="width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 13px;">
+          <thead>
+            <tr style="background-color: #f8fafc; border-bottom: 2px solid #e2e8f0; text-align: left;">
+              <th style="padding: 10px;">Activity</th>
+              <th style="padding: 10px; width: 120px;">Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${stop.activities && stop.activities.length > 0 ? stop.activities.map(act => `
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px; color: #334155; font-weight: 500;">${act.name}</td>
+                <td style="padding: 10px; color: #0f172a; font-weight: bold;">$${act.cost}</td>
+              </tr>
+            `).join('') : `
+              <tr>
+                <td colspan="2" style="padding: 10px; color: #94a3b8; font-style: italic;">No activities planned for this stop.</td>
+              </tr>
+            `}
+          </tbody>
+        </table>
+      </div>
+    `).join('');
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>${tripName} - Itinerary Export</title>
+          <style>
+            body { font-family: sans-serif; padding: 40px; color: #333; max-width: 800px; margin: 0 auto; }
+            h1 { text-align: center; color: #1e3b8a; margin-bottom: 5px; font-size: 28px; }
+            .subtitle { text-align: center; color: #64748b; margin-bottom: 40px; font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; }
+            .summary { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px; margin-bottom: 40px; }
+            .summary-table { width: 100%; border-collapse: collapse; }
+            .summary-table td { padding: 5px 10px; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <h1>${tripName}</h1>
+          <div class="subtitle">Official Traveloop Travel Itinerary</div>
+          
+          <div class="summary">
+            <table class="summary-table">
+              <tr>
+                <td><strong>Total Stops:</strong> ${stops.length}</td>
+                <td style="text-align: right;"><strong>Estimated Total Budget:</strong> $${totalBudget}</td>
+              </tr>
+            </table>
+          </div>
+          
+          ${stopsHtml}
+          
+          <div style="margin-top: 50px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+            Generated with Traveloop • Explorers United
+          </div>
+          
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   // Handle field changes for a specific stop
   const handleStopChange = (stopId, field, value) => {
@@ -200,6 +282,17 @@ export default function ItineraryBuilder() {
     }
   };
 
+  const handleMoveActivity = (stopId, activityIndex, direction) => {
+    setStops((prevStops) => prevStops.map((stop) => {
+      if (stop.id !== stopId) return stop;
+      const targetIndex = activityIndex + direction;
+      if (targetIndex < 0 || targetIndex >= stop.activities.length) return stop;
+      const activities = [...stop.activities];
+      [activities[activityIndex], activities[targetIndex]] = [activities[targetIndex], activities[activityIndex]];
+      return { ...stop, activities };
+    }));
+  };
+
   // Save itinerary to backend
   const handleSaveItinerary = async () => {
     setError('');
@@ -216,10 +309,12 @@ export default function ItineraryBuilder() {
 
     try {
       const payload = {
+        version: tripVersion,
         stops: stops.map((stop) => ({
           city_name: stop.city,
           arrival_date: stop.arrivalDate,
           departure_date: stop.departureDate,
+          timezone: stop.timezone || null,
           budget: stop.budget ? parseFloat(stop.budget) : 0,
           description: String(stop.description || ''),
           // Ensure we send activity objects with costs
@@ -234,6 +329,7 @@ export default function ItineraryBuilder() {
       const response = await api.post(`/api/trips/${tripId}/itinerary`, payload);
 
       if (response.status === 200 || response.status === 201) {
+        setTripVersion(response.data.version);
         setSuccess('Itinerary saved successfully!');
         setShowSaveIndicator(true);
         setTimeout(() => setShowSaveIndicator(false), 2000);
@@ -260,6 +356,7 @@ export default function ItineraryBuilder() {
       }
 
       const payload = {
+        version: tripVersion,
         stops: stops.map((stop) => ({
           city_name: stop.city,
           arrival_date: stop.arrivalDate,
@@ -277,6 +374,7 @@ export default function ItineraryBuilder() {
       const response = await api.post(`/api/trips/${tripId}/itinerary`, payload);
 
       if (response.status === 200 || response.status === 201) {
+        setTripVersion(response.data.version);
         setSuccess('Itinerary saved successfully!');
         setTimeout(() => navigate(`/trip/${tripId}/view`), 800);
       }
@@ -289,9 +387,11 @@ export default function ItineraryBuilder() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b0c14] text-white selection:bg-blue-500/30 pb-32">
+    <div className="min-h-screen bg-[#0b0c14] text-white selection:bg-blue-500/30 pb-32 pt-20">
+      <Navbar />
+
       {/* Sticky Header */}
-      <div className="sticky top-0 z-50 bg-[#0b0c14]/80 border-b border-white/5 backdrop-blur-md">
+      <div className="sticky top-[72px] z-40 bg-[#0b0c14]/80 border-b border-white/5 backdrop-blur-md">
         <div className="max-w-4xl mx-auto px-6 py-6 flex items-center justify-between">
           <div className="space-y-1">
             <h1 className="text-3xl font-black uppercase tracking-tight">{tripName}</h1>
@@ -305,13 +405,20 @@ export default function ItineraryBuilder() {
                <p className="text-[10px] font-black uppercase tracking-widest text-white/30">Est. Total Budget</p>
                <p className="text-xl font-black text-blue-400">₹{totalBudget.toLocaleString()}</p>
             </div>
-            <button
-              onClick={() => navigate(`/trip/${tripId}/view`)}
-              className="flex items-center gap-2 px-6 py-3 bg-white text-black rounded-full font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl"
-            >
-              <Eye size={16} />
-              Preview
-            </button>
+             <button
+              onClick={handleExportPDF}
+              className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl cursor-pointer"
+             >
+              <Download size={16} />
+              Export PDF
+             </button>
+             <button
+               onClick={() => navigate(`/trip/${tripId}/view`)}
+               className="flex items-center gap-2 px-6 py-3 bg-white text-black rounded-full font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl cursor-pointer"
+             >
+               <Eye size={16} />
+               Preview
+             </button>
           </div>
         </div>
       </div>
@@ -352,9 +459,9 @@ export default function ItineraryBuilder() {
                   <h2 className="text-2xl font-black uppercase tracking-tight">Destination {index + 1}</h2>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => handleMoveUp(stop.id)} disabled={index === 0} className="p-2.5 rounded-xl bg-white/5 disabled:opacity-20 hover:bg-white/10 transition-all"><ChevronUp size={20} /></button>
-                  <button onClick={() => handleMoveDown(stop.id)} disabled={index === stops.length - 1} className="p-2.5 rounded-xl bg-white/5 disabled:opacity-20 hover:bg-white/10 transition-all"><ChevronDown size={20} /></button>
-                  <button onClick={() => handleDeleteStop(stop.id)} className="p-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-all"><Trash2 size={20} /></button>
+                  <button aria-label={`Move ${stop.city || 'stop'} up`} onClick={() => handleMoveUp(stop.id)} disabled={index === 0} className="p-2.5 rounded-xl bg-white/5 disabled:opacity-20 hover:bg-white/10 transition-all"><ChevronUp size={20} /></button>
+                  <button aria-label={`Move ${stop.city || 'stop'} down`} onClick={() => handleMoveDown(stop.id)} disabled={index === stops.length - 1} className="p-2.5 rounded-xl bg-white/5 disabled:opacity-20 hover:bg-white/10 transition-all"><ChevronDown size={20} /></button>
+                  <button aria-label={`Delete ${stop.city || 'stop'}`} onClick={() => handleDeleteStop(stop.id)} className="p-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-all"><Trash2 size={20} /></button>
                 </div>
               </div>
 
@@ -367,10 +474,22 @@ export default function ItineraryBuilder() {
                       <MapPin className="absolute left-5 top-1/2 -translate-y-1/2 text-white/20" size={18} />
                       <input
                         type="text"
+                        aria-label="City"
                         placeholder="Paris, France"
                         value={stop.city}
                         onChange={(e) => handleStopChange(stop.id, 'city', e.target.value)}
                         className="w-full pl-14 pr-6 py-5 bg-white/5 border-none rounded-2xl focus:ring-2 focus:ring-blue-500/20 transition-all placeholder-white/10"
+                      />
+                    </div>
+                    <div className="space-y-3 md:col-span-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Destination timezone (IANA)</label>
+                      <input
+                        type="text"
+                        aria-label="Destination timezone"
+                        placeholder="e.g. Asia/Tokyo"
+                        value={stop.timezone || ''}
+                        onChange={(e) => handleStopChange(stop.id, 'timezone', e.target.value)}
+                        className="w-full px-6 py-5 bg-white/5 border-none rounded-2xl focus:ring-2 focus:ring-blue-500/20 transition-all text-white/60"
                       />
                     </div>
                   </div>
@@ -380,6 +499,7 @@ export default function ItineraryBuilder() {
                       <DollarSign className="absolute left-5 top-1/2 -translate-y-1/2 text-white/20" size={18} />
                       <input
                         type="number"
+                        aria-label="General stop budget"
                         placeholder="0.00"
                         value={stop.budget}
                         onChange={(e) => handleStopChange(stop.id, 'budget', e.target.value)}
@@ -394,6 +514,7 @@ export default function ItineraryBuilder() {
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Arrival Date</label>
                     <input
                       type="date"
+                      aria-label="Arrival date"
                       value={stop.arrivalDate}
                       onChange={(e) => handleStopChange(stop.id, 'arrivalDate', e.target.value)}
                       className="w-full px-6 py-5 bg-white/5 border-none rounded-2xl focus:ring-2 focus:ring-blue-500/20 transition-all text-white/60"
@@ -403,6 +524,7 @@ export default function ItineraryBuilder() {
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Departure Date</label>
                     <input
                       type="date"
+                      aria-label="Departure date"
                       value={stop.departureDate}
                       onChange={(e) => handleStopChange(stop.id, 'departureDate', e.target.value)}
                       className="w-full px-6 py-5 bg-white/5 border-none rounded-2xl focus:ring-2 focus:ring-blue-500/20 transition-all text-white/60"
@@ -418,6 +540,7 @@ export default function ItineraryBuilder() {
                       <Plus className="absolute left-5 top-1/2 -translate-y-1/2 text-white/20" size={18} />
                       <input
                         type="text"
+                        aria-label="Activity name"
                         placeholder="Activity name (e.g., Wine Tasting)"
                         value={stop.activityInput}
                         onChange={(e) => handleStopChange(stop.id, 'activityInput', e.target.value)}
@@ -429,6 +552,7 @@ export default function ItineraryBuilder() {
                       <Wallet className="absolute left-5 top-1/2 -translate-y-1/2 text-white/20" size={18} />
                       <input
                         type="number"
+                        aria-label="Activity cost"
                         placeholder="Cost"
                         value={stop.activityCostInput}
                         onChange={(e) => handleStopChange(stop.id, 'activityCostInput', e.target.value)}
@@ -444,7 +568,25 @@ export default function ItineraryBuilder() {
                       <div key={idx} className="group/act flex items-center gap-3 pl-4 pr-2 py-2.5 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all">
                         <span className="text-xs font-bold text-white/80">{act.name}</span>
                         <span className="text-[10px] font-black text-blue-400 bg-blue-400/10 px-2 py-1 rounded-full">₹{act.cost}</span>
-                        <button onClick={() => handleRemoveActivity(stop.id, idx)} className="p-1 hover:text-red-400 transition-colors">
+                        <button
+                          type="button"
+                          aria-label={`Move ${act.name} up`}
+                          disabled={idx === 0}
+                          onClick={() => handleMoveActivity(stop.id, idx, -1)}
+                          className="p-1 hover:text-blue-400 disabled:opacity-30 transition-colors"
+                        >
+                          <ChevronUp size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Move ${act.name} down`}
+                          disabled={idx === stop.activities.length - 1}
+                          onClick={() => handleMoveActivity(stop.id, idx, 1)}
+                          className="p-1 hover:text-blue-400 disabled:opacity-30 transition-colors"
+                        >
+                          <ChevronDown size={14} />
+                        </button>
+                        <button type="button" aria-label={`Remove ${act.name}`} onClick={() => handleRemoveActivity(stop.id, idx)} className="p-1 hover:text-red-400 transition-colors">
                           <X size={14} />
                         </button>
                       </div>

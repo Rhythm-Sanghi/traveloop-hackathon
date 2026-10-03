@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
-  User,
   Mail,
   Globe,
   Settings,
@@ -10,8 +9,6 @@ import {
   Camera,
   ChevronRight,
   Shield,
-  Bell,
-  LogOut,
   Loader2,
   Calendar,
   MapPin,
@@ -19,8 +16,11 @@ import {
   Phone,
   Info,
   ShieldCheck,
+  Bookmark,
 } from 'lucide-react';
 import api from '../api';
+import Navbar from '../components/Navbar';
+import { resolveApiUrl } from '../utils/media';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
@@ -38,9 +38,22 @@ export default function ProfilePage() {
     city: '',
     country: '',
     additional_info: '',
+    avatar_url: '',
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [passwordData, setPasswordData] = useState({
+    current_password: '',
+    new_password: '',
+    confirm_password: '',
+  });
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const avatarInputRef = useRef(null);
+
+  // Bookmarks State
+  const [bookmarks, setBookmarks] = useState({ trip: [], post: [] });
+  const [feedItems, setFeedItems] = useState([]);
+  const [bookmarksLoading, setBookmarksLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -56,6 +69,7 @@ export default function ProfilePage() {
           city: profileRes.data.city || '',
           country: profileRes.data.country || '',
           additional_info: profileRes.data.additional_info || '',
+          avatar_url: profileRes.data.avatar_url || '',
         });
       } catch (err) {
         if (err.response?.status === 401) {
@@ -83,10 +97,24 @@ export default function ProfilePage() {
       } finally {
         setTripsLoading(false);
       }
+
+      try {
+        setBookmarksLoading(true);
+        const [bookmarksRes, feedRes] = await Promise.all([
+          api.get('/api/community/bookmarks'),
+          api.get('/api/community/feed')
+        ]);
+        setBookmarks(bookmarksRes.data || { trip: [], post: [] });
+        setFeedItems(feedRes.data || []);
+      } catch (err) {
+        console.error("Error fetching bookmarks:", err);
+      } finally {
+        setBookmarksLoading(false);
+      }
     };
 
     fetchData();
-  }, []);
+  }, [navigate]);
 
   const { preplannedTrips, previousTrips } = useMemo(() => {
     const now = new Date();
@@ -110,18 +138,33 @@ export default function ProfilePage() {
     );
   }, [trips]);
 
+  const bookmarkedTrips = useMemo(() => {
+    return feedItems.filter(item => item.isRealTrip && bookmarks.trip?.includes(item.tripId));
+  }, [feedItems, bookmarks]);
+
+  const bookmarkedPosts = useMemo(() => {
+    return feedItems.filter(item => !item.isRealTrip && bookmarks.post?.includes(item.postId));
+  }, [feedItems, bookmarks]);
+
+  const getAvatarUrl = (avatar) => {
+    if (!avatar) {
+      return `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile?.username || 'Traveloop'}`;
+    }
+    return resolveApiUrl(avatar);
+  };
+
   const handleSaveProfile = async () => {
     try {
       setSaveLoading(true);
       setError('');
       setSuccess('');
-      
+
       await api.post('/api/profile', editData);
-      
+
       setProfile({ ...profile, ...editData });
       setIsEditing(false);
       setSuccess('Profile updated successfully!');
-      
+
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error('Error saving profile:', err);
@@ -131,9 +174,86 @@ export default function ProfilePage() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    navigate('/login');
+  const handleAvatarUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('Please choose a valid image file.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Avatar image must be 5MB or smaller.');
+      return;
+    }
+
+    try {
+      setSaveLoading(true);
+      setError('');
+      setSuccess('');
+
+      const formData = new FormData();
+      formData.append('file', file);
+      const uploadRes = await api.post('/api/uploads/images', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      const avatarUrl = uploadRes.data.url;
+      const payload = { ...editData, avatar_url: avatarUrl };
+      await api.post('/api/profile', payload);
+
+      setProfile({ ...profile, avatar_url: avatarUrl });
+      setEditData(payload);
+      setSuccess('Profile photo uploaded successfully!');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      console.error('Error updating avatar:', err);
+      setError(err.response?.data?.detail || 'Failed to save profile photo.');
+    } finally {
+      setSaveLoading(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleChangePassword = async (event) => {
+    event.preventDefault();
+    setError('');
+    setSuccess('');
+
+    if (passwordData.new_password !== passwordData.confirm_password) {
+      setError('New password confirmation does not match.');
+      return;
+    }
+
+    try {
+      setPasswordLoading(true);
+      const response = await api.post('/api/auth/change-password', {
+        current_password: passwordData.current_password,
+        new_password: passwordData.new_password,
+      });
+      setPasswordData({ current_password: '', new_password: '', confirm_password: '' });
+      setSuccess(response.data.message);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to update password.');
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm('Permanently delete your account and all trip data? This cannot be undone.')) return;
+    try {
+      setError('');
+      await api.delete('/api/account');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('token');
+      localStorage.removeItem('username');
+      localStorage.removeItem('is_admin');
+      navigate('/login');
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to delete your account.');
+    }
   };
 
   if (loading) {
@@ -146,22 +266,7 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-[#0b0c14] text-white selection:bg-blue-500/30">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0b0c14]/80 backdrop-blur-md border-b border-white/5 px-6 py-4 flex justify-between items-center">
-        <Link to="/dashboard" className="flex items-center gap-2 group">
-          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center group-hover:rotate-12 transition-transform">
-            <div className="w-4 h-4 bg-[#0b0c14] rounded-sm rotate-45" />
-          </div>
-          <span className="text-xl font-black tracking-tighter uppercase">Traveloop</span>
-        </Link>
-        <button 
-          onClick={handleLogout}
-          className="p-2.5 rounded-xl bg-white/5 hover:bg-red-500/10 text-white/40 hover:text-red-400 transition-all flex items-center gap-2"
-        >
-          <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Logout</span>
-          <LogOut size={18} />
-        </button>
-      </nav>
+      <Navbar />
 
       <main className="max-w-5xl mx-auto px-6 pt-32 pb-24">
         
@@ -181,12 +286,25 @@ export default function ProfilePage() {
           <div className="relative group self-center lg:self-start">
             <div className="w-40 h-40 rounded-full bg-[#161827] border-4 border-white/5 overflow-hidden shadow-2xl shadow-blue-500/10 group-hover:scale-105 transition-transform duration-500">
               <img 
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${profile?.username || 'Traveloop'}`} 
+                src={getAvatarUrl(profile?.avatar_url || editData.avatar_url)}
                 alt="Profile" 
                 className="w-full h-full object-cover"
               />
             </div>
-            <button className="absolute bottom-1 right-1 p-2.5 bg-blue-600 rounded-full shadow-2xl border-4 border-[#0b0c14] hover:scale-110 active:scale-95 transition-transform">
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarUpload}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => avatarInputRef.current?.click()}
+              className="absolute bottom-1 right-1 p-2.5 bg-blue-600 rounded-full shadow-2xl border-4 border-[#0b0c14] hover:scale-110 active:scale-95 transition-transform disabled:opacity-50"
+              disabled={saveLoading}
+              aria-label="Upload profile photo"
+            >
               <Camera size={16} className="text-white" />
             </button>
           </div>
@@ -434,6 +552,87 @@ export default function ProfilePage() {
             )}
           </section>
 
+          {/* Bookmarked Adventures */}
+          <section className="space-y-8">
+            <header className="flex items-center justify-between border-b border-white/5 pb-4">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                  <Bookmark size={20} className="text-blue-500" />
+                </div>
+                <h2 className="text-2xl font-black uppercase tracking-tight">Bookmarked <span className="text-blue-500">Adventures</span></h2>
+              </div>
+            </header>
+
+            {bookmarksLoading ? (
+              <div className="flex gap-6 overflow-hidden pb-6">
+                {[1, 2].map(i => (
+                  <div key={i} className="bg-[#161827] border border-white/5 w-64 h-40 rounded-4xl animate-pulse" />
+                ))}
+              </div>
+            ) : bookmarkedTrips.length > 0 || bookmarkedPosts.length > 0 ? (
+              <div className="space-y-12">
+                {bookmarkedTrips.length > 0 && (
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-500">Saved Itineraries</h3>
+                    <div className="flex gap-6 overflow-x-auto pb-6 scrollbar-hide snap-x">
+                      {bookmarkedTrips.map((item) => (
+                        <div 
+                          key={item.id} 
+                          className="bg-[#161827] border border-white/5 w-64 p-6 rounded-4xl shrink-0 snap-start hover:border-white/20 transition-all flex flex-col justify-between"
+                        >
+                          <div>
+                            <div className="w-full h-24 rounded-2xl overflow-hidden mb-4 border border-white/5">
+                              <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
+                            </div>
+                            <h4 className="font-black text-sm uppercase tracking-tight truncate mb-1">{item.title}</h4>
+                            <p className="text-[10px] font-bold text-slate-500">By {item.authorName}</p>
+                          </div>
+                          <Link 
+                            to={`/trip/public/${item.tripId}`}
+                            className="mt-6 w-full py-2.5 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/10 text-blue-400 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer"
+                          >
+                            View Itinerary
+                          </Link>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {bookmarkedPosts.length > 0 && (
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-500">Saved Community Posts</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      {bookmarkedPosts.map((item) => (
+                        <div 
+                          key={item.id} 
+                          className="bg-[#161827] border border-white/5 p-6 rounded-4xl hover:border-white/20 transition-all space-y-4"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-xl bg-white/5 overflow-hidden border border-white/10 p-0.5">
+                              <img src={item.avatarUrl} alt={item.authorName} className="w-full h-full object-cover rounded-lg" />
+                            </div>
+                            <div>
+                              <h4 className="font-black text-xs uppercase tracking-tight text-slate-200">{item.authorName}</h4>
+                              <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">{item.timestamp}</p>
+                            </div>
+                          </div>
+                          <p className="text-xs text-slate-400 font-medium line-clamp-3">{item.contentPreview}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="py-12 bg-white/1 border-2 border-dashed border-white/5 rounded-4xl text-center">
+                <Bookmark size={40} className="mx-auto text-white/5 mb-4" />
+                <p className="text-slate-500 font-medium tracking-wide">No bookmarked posts or journeys yet.</p>
+                <Link to="/community" className="text-blue-500 text-[10px] font-black uppercase tracking-widest mt-3 block hover:underline">Explore the community hub</Link>
+              </div>
+            )}
+          </section>
+
           {/* Settings Section */}
           <section className="space-y-8">
             <header className="flex items-center gap-4 border-b border-white/5 pb-4">
@@ -480,6 +679,42 @@ export default function ProfilePage() {
                 <ChevronRight size={16} className="text-blue-400 group-hover:translate-x-1 transition-all" />
               </div>
             </div>
+
+            <form onSubmit={handleChangePassword} className="p-8 bg-[#161827] rounded-4xl border border-white/10 space-y-5">
+              <div className="flex items-center gap-3">
+                <ShieldCheck size={18} className="text-blue-400" />
+                <div>
+                  <p className="font-black uppercase tracking-widest text-xs">Change password</p>
+                  <p className="text-slate-500 text-xs font-medium mt-1">Use your current password to protect the account.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[
+                  ['current_password', 'Current password'],
+                  ['new_password', 'New password'],
+                  ['confirm_password', 'Confirm new password'],
+                ].map(([field, label]) => (
+                  <label key={field} className="space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-white/40">{label}</span>
+                    <input
+                      required
+                      minLength={field === 'current_password' ? 1 : 8}
+                      type="password"
+                      value={passwordData[field]}
+                      onChange={(event) => setPasswordData({ ...passwordData, [field]: event.target.value })}
+                      className="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-white"
+                    />
+                  </label>
+                ))}
+              </div>
+              <button
+                type="submit"
+                disabled={passwordLoading}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-full text-[10px] font-black uppercase tracking-widest transition-all"
+              >
+                {passwordLoading ? 'Updating...' : 'Update password'}
+              </button>
+            </form>
           </section>
 
           {/* Danger Zone */}
@@ -493,7 +728,7 @@ export default function ProfilePage() {
                 Permanently delete your Traveloop account and all associated trip data. This action is irreversible.
               </p>
             </div>
-            <button className="flex items-center gap-3 px-10 py-5 bg-red-500/10 border border-red-500/20 rounded-full text-red-500 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-red-500 hover:text-white transition-all shadow-xl shadow-red-500/5 group">
+            <button onClick={handleDeleteAccount} className="flex items-center gap-3 px-10 py-5 bg-red-500/10 border border-red-500/20 rounded-full text-red-500 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-red-500 hover:text-white transition-all shadow-xl shadow-red-500/5 group">
               Confirm Deletion
             </button>
           </section>

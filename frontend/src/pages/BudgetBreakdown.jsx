@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -24,6 +24,8 @@ import {
   Tooltip as RechartsTooltip,
 } from 'recharts';
 import api from '../api';
+import Navbar from '../components/Navbar';
+import { resolveApiUrl } from '../utils/media';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
 
@@ -31,13 +33,34 @@ export default function BudgetBreakdown() {
   const { tripId } = useParams();
   const navigate = useNavigate();
   const [trip, setTrip] = useState(null);
+  const [actualExpenses, setActualExpenses] = useState([]);
+  const [isOfflineSnapshot, setIsOfflineSnapshot] = useState(false);
+  const cacheKey = useMemo(
+    () => `traveloop:private:${localStorage.getItem('auth_user_id') || localStorage.getItem('username')}:trip:${tripId}:budget`,
+    [tripId],
+  );
   const [loading, setLoading] = useState(true);
   const [isPaid, setIsPaid] = useState(false);
+  const formatMoney = (amount, currency = trip?.currency || 'USD') => (
+    new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount)
+  );
 
   const getImageUrl = (url) => {
-    if (!url) return "https://images.unsplash.com/photo-1506929113675-80af2454a32b?auto=format&fit=crop&w=300&q=80";
-    if (url.startsWith('http')) return url;
-    return `http://localhost:8000${url.startsWith('/') ? '' : '/'}${url}`;
+    return resolveApiUrl(url, "https://images.unsplash.com/photo-1506929113675-80af2454a32b?auto=format&fit=crop&w=300&q=80");
+  };
+
+  const handleCalendarExport = async () => {
+    try {
+      const response = await api.get(`/api/trips/${tripId}/calendar.ics`, { responseType: 'blob' });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `traveloop-trip-${tripId}.ics`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to export calendar:', err);
+    }
   };
 
   useEffect(() => {
@@ -52,30 +75,54 @@ export default function BudgetBreakdown() {
         const response = await api.get(`/api/trips/${tripId}`);
         if (response.data) {
           setTrip(response.data);
+          setIsPaid(response.data.is_settled === 1);
+          const expensesResponse = await api.get('/api/expenses', { params: { trip_id: tripId } });
+          const expenses = Array.isArray(expensesResponse.data) ? expensesResponse.data : [];
+          setActualExpenses(expenses);
+          localStorage.setItem(cacheKey, JSON.stringify({
+            trip: response.data,
+            expenses,
+            savedAt: new Date().toISOString(),
+          }));
+          setIsOfflineSnapshot(false);
         } else {
           setTrip(null);
         }
       } catch (err) {
         console.error('Budget fetch failed:', err);
-        setTrip(null);
+        try {
+          const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+          if (cached?.trip) {
+            setTrip(cached.trip);
+            setActualExpenses(Array.isArray(cached.expenses) ? cached.expenses : []);
+            setIsPaid(cached.trip.is_settled === 1);
+            setIsOfflineSnapshot(true);
+          } else {
+            setTrip(null);
+            setActualExpenses([]);
+          }
+        } catch (cacheError) {
+          console.error('Budget offline snapshot could not be read:', cacheError);
+          setTrip(null);
+          setActualExpenses([]);
+        }
       } finally {
         setLoading(false);
       }
     };
     fetchTripDetails();
-  }, [tripId]);
+  }, [tripId, cacheKey]);
 
   const financialData = useMemo(() => {
     if (!trip) return null;
 
-    // 1. Map all activities into a single expenses array
-    const items = [];
+    const plannedItems = [];
     if (trip.stops) {
       trip.stops.forEach((stop, stopIdx) => {
         if (stop.activities) {
           stop.activities.forEach((activity, actIdx) => {
             const cost = typeof activity === 'object' ? (parseFloat(activity.cost) || 0) : 0;
-            items.push({
+            plannedItems.push({
               id: `${stopIdx}-${actIdx}`, // Unique ID for table rows
               name: typeof activity === 'object' ? activity.name : activity,
               category: (typeof activity === 'object' && activity.category) ? activity.category : 'General',
@@ -87,22 +134,32 @@ export default function BudgetBreakdown() {
       });
     }
 
-    // 2. Financial Logic
-    const subtotal = items.reduce((sum, item) => sum + item.cost, 0);
-    const tax = subtotal * 0.05;
-    const grandTotal = subtotal + tax;
+    const plannedSubtotal = plannedItems.reduce((sum, item) => sum + item.cost, 0);
+    const actualItems = actualExpenses.map((expense) => ({
+      id: `actual-${expense.id}`,
+      name: expense.title,
+      category: expense.category || 'General',
+      city: expense.stop_id
+        ? (trip.stops.find((stop) => stop.id === expense.stop_id)?.city_name || 'Various')
+        : 'Various',
+      cost: Number(expense.amount) || 0,
+    }));
+    const actualSubtotal = actualItems.reduce((sum, item) => sum + item.cost, 0);
     const plannedBudget = trip.total_budget || 0;
 
     // 3. Chart Data (Group by Category)
-    const breakdown = trip.budget?.breakdown || {};
+    const breakdown = actualItems.reduce((acc, item) => {
+      acc[item.category] = (acc[item.category] || 0) + item.cost;
+      return acc;
+    }, {});
     // Ensure we only show categories with actual value > 0
     const chartData = Object.entries(breakdown)
-      .filter(([_, value]) => value > 0)
+      .filter(([, value]) => value > 0)
       .map(([name, value]) => ({ name, value }));
 
     // Fallback for chart if breakdown is empty but we have items
-    if (chartData.length === 0 && items.length > 0) {
-      const manualBreakdown = items.reduce((acc, item) => {
+    if (chartData.length === 0 && plannedItems.length > 0) {
+      const manualBreakdown = plannedItems.reduce((acc, item) => {
         acc[item.category] = (acc[item.category] || 0) + item.cost;
         return acc;
       }, {});
@@ -112,16 +169,16 @@ export default function BudgetBreakdown() {
     }
 
     return {
-      subtotal,
-      tax,
-      grandTotal,
+      plannedSubtotal,
+      actualSubtotal,
       plannedBudget,
-      items,
+      plannedItems,
+      actualItems,
       chartData,
-      isOverBudget: grandTotal > plannedBudget,
-      remaining: plannedBudget - grandTotal
+      isOverBudget: actualSubtotal > plannedBudget,
+      remaining: plannedBudget - actualSubtotal
     };
-  }, [trip]);
+  }, [trip, actualExpenses]);
 
   if (loading) {
     return (
@@ -145,21 +202,23 @@ export default function BudgetBreakdown() {
 
   return (
     <div className="min-h-screen bg-[#0b0c14] text-white selection:bg-blue-500/30 pb-32">
-      {/* Header */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0b0c14]/80 backdrop-blur-md border-b border-white/5 px-6 py-4 flex justify-between items-center">
-        <Link to="/dashboard" className="flex items-center gap-4 group">
-          <ArrowLeft size={18} className="text-white/40 group-hover:text-white group-hover:-translate-x-1 transition-all" />
-          <span className="text-xs font-black uppercase tracking-widest">Back to My Trips</span>
-        </Link>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-            <div className="w-4 h-4 bg-[#0b0c14] rounded-sm rotate-45" />
-          </div>
-          <span className="text-xl font-black tracking-tighter uppercase">Traveloop</span>
-        </div>
-      </nav>
+      <Navbar />
 
-      <main className="max-w-350 mx-auto px-6 pt-32 space-y-12">
+      <main className="max-w-3xl mx-auto px-6 pt-32 space-y-12">
+        {isOfflineSnapshot && (
+          <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-5 py-4 text-xs font-bold text-amber-200">
+            Travel Mode: showing the last saved budget snapshot. Reconnect to refresh expenses.
+          </div>
+        )}
+        <div className="flex items-center justify-between pb-2">
+          <button 
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center gap-2 text-white/40 hover:text-white transition-colors group cursor-pointer"
+          >
+            <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+            <span className="text-[10px] font-black uppercase tracking-widest">Back to Dashboard</span>
+          </button>
+        </div>
         
         {/* Invoice Header Card */}
         <section className="bg-[#161827] border border-white/10 rounded-4xl p-10 flex flex-col lg:flex-row justify-between items-center gap-8 shadow-2xl relative overflow-hidden">
@@ -193,7 +252,7 @@ export default function BudgetBreakdown() {
               <div className={`px-6 py-2 rounded-full border flex items-center gap-2 transition-all ${
                 isPaid 
                 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.1)]' 
-                : 'bg-orange-500/10 border-orange-500/20 text-orange-400 animate-pulse'
+                : 'bg-orange-500/10 border-orange-500/20 text-orange-200 animate-pulse'
               }`}>
                  <div className={`w-2 h-2 rounded-full ${isPaid ? 'bg-emerald-500' : 'bg-orange-500'}`} />
                  <span className="text-[10px] font-black uppercase tracking-widest">
@@ -212,10 +271,10 @@ export default function BudgetBreakdown() {
                     <Receipt size={20} className="text-blue-500" />
                     <h2 className="text-xl font-black uppercase tracking-tight">Itemized Breakdown</h2>
                  </div>
-                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{financialData.items.length} Entries</span>
+                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{financialData.actualItems.length} Actual Entries</span>
               </header>
 
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" tabIndex="0" aria-label="Budget details table">
                  <table className="w-full text-left">
                     <thead className="bg-white/2 text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-white/5">
                        <tr>
@@ -226,8 +285,8 @@ export default function BudgetBreakdown() {
                        </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                       {financialData.items.length > 0 ? (
-                         financialData.items.map((item) => (
+                       {financialData.actualItems.length > 0 ? (
+                         financialData.actualItems.map((item) => (
                            <tr key={item.id} className="group hover:bg-white/2 transition-all">
                               <td className="px-8 py-6 text-sm font-bold text-white group-hover:text-blue-400 transition-colors">
                                  {item.name}
@@ -241,7 +300,7 @@ export default function BudgetBreakdown() {
                                  {item.city}
                               </td>
                               <td className="px-8 py-6 text-right font-black text-sm">
-                                 ₹{item.cost.toLocaleString()}
+                                 {formatMoney(item.cost)}
                               </td>
                            </tr>
                          ))
@@ -252,8 +311,8 @@ export default function BudgetBreakdown() {
                                  <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center">
                                     <Receipt size={20} className="opacity-20" />
                                  </div>
-                                 <p className="text-xs font-black uppercase tracking-widest">No expenses recorded yet</p>
-                                 <Link to={`/trip/${tripId}/edit`} className="text-[10px] text-blue-500 hover:underline font-black uppercase tracking-widest">Add activities to get started</Link>
+                                 <p className="text-xs font-black uppercase tracking-widest">No actual expenses recorded yet</p>
+                                 <Link to={`/trip/${tripId}/edit`} className="text-[10px] text-blue-500 hover:underline font-black uppercase tracking-widest">Planned activities are shown in the budget</Link>
                               </div>
                            </td>
                          </tr>
@@ -265,19 +324,19 @@ export default function BudgetBreakdown() {
               {/* Totals Block */}
               <footer className="p-8 bg-linear-to-br from-white/2 to-blue-600/5 space-y-4 border-t border-white/5">
                  <div className="flex justify-between items-center text-slate-400">
-                    <span className="text-xs font-black uppercase tracking-widest">Subtotal</span>
-                    <span className="font-bold">₹{financialData.subtotal.toLocaleString()}</span>
+                    <span className="text-xs font-black uppercase tracking-widest">Planned activities</span>
+                    <span className="font-bold">{formatMoney(financialData.plannedSubtotal)}</span>
                  </div>
                  <div className="flex justify-between items-center text-slate-400">
-                    <span className="text-xs font-black uppercase tracking-widest">Gov. Tax (5%)</span>
-                    <span className="font-bold">₹{financialData.tax.toLocaleString()}</span>
+                    <span className="text-xs font-black uppercase tracking-widest">Actual expenses</span>
+                    <span className="font-bold">{formatMoney(financialData.actualSubtotal)}</span>
                  </div>
                  <div className="pt-4 border-t border-white/10 flex justify-between items-center">
                     <div className="space-y-1">
                        <span className="text-xs font-black uppercase tracking-widest text-blue-500">Grand Total</span>
-                       <p className="text-[10px] text-slate-500 uppercase tracking-widest">Fully inclusive of all activities</p>
+                       <p className="text-[10px] text-slate-500 uppercase tracking-widest">Recorded spending only</p>
                     </div>
-                    <span className="text-4xl font-black text-white">₹{financialData.grandTotal.toLocaleString()}</span>
+                    <span className="text-4xl font-black text-white">{formatMoney(financialData.actualSubtotal)}</span>
                  </div>
               </footer>
            </div>
@@ -330,14 +389,14 @@ export default function BudgetBreakdown() {
                           <Wallet size={16} className="text-blue-500" />
                           <span className="text-[10px] font-black uppercase tracking-widest">Total Budget</span>
                        </div>
-                       <span className="font-bold">₹{financialData.plannedBudget.toLocaleString()}</span>
+                       <span className="font-bold">{formatMoney(financialData.plannedBudget)}</span>
                     </div>
                     <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
                        <div className="flex items-center gap-3">
                           <TrendingUp size={16} className="text-rose-500" />
                           <span className="text-[10px] font-black uppercase tracking-widest">Total Spent</span>
                        </div>
-                       <span className="font-bold">₹{financialData.grandTotal.toLocaleString()}</span>
+                       <span className="font-bold">{formatMoney(financialData.actualSubtotal)}</span>
                     </div>
                     <div className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
                       financialData.isOverBudget 
@@ -351,7 +410,7 @@ export default function BudgetBreakdown() {
                           </span>
                        </div>
                        <span className={`font-black ${financialData.isOverBudget ? 'text-rose-500' : 'text-emerald-500'}`}>
-                          ₹{Math.abs(financialData.remaining).toLocaleString()}
+                          {formatMoney(Math.abs(financialData.remaining))}
                        </span>
                     </div>
                  </div>
@@ -369,25 +428,32 @@ export default function BudgetBreakdown() {
 
         {/* Global Action Buttons */}
         <footer className="flex flex-col sm:flex-row justify-center items-center gap-6 pt-12 border-t border-white/5">
-           <button className="flex items-center justify-center gap-3 px-10 py-5 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all group">
+           <button onClick={handleCalendarExport} className="flex items-center justify-center gap-3 px-10 py-5 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all group">
               <Download size={20} className="text-white/40 group-hover:text-white group-hover:translate-y-0.5 transition-all" />
-              <span className="text-[10px] font-black uppercase tracking-widest">Download Invoice</span>
+              <span className="text-[10px] font-black uppercase tracking-widest">Export Calendar</span>
            </button>
            <button className="flex items-center justify-center gap-3 px-10 py-5 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all group">
               <Printer size={20} className="text-white/40 group-hover:text-white transition-all" />
               <span className="text-[10px] font-black uppercase tracking-widest">Export as PDF</span>
            </button>
            <button 
-            onClick={() => setIsPaid(!isPaid)}
-            className={`flex items-center justify-center gap-3 px-12 py-5 rounded-full font-black text-xs uppercase tracking-[0.2em] transition-all shadow-2xl active:scale-[0.98] ${
-              isPaid 
-              ? 'bg-white/10 text-white border border-white/20' 
-              : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/20'
-            }`}
-           >
-              {isPaid ? <CheckCircle size={20} /> : <FileText size={20} />}
-              {isPaid ? 'Payment Confirmed' : 'Mark as Settled'}
-           </button>
+             onClick={async () => {
+               try {
+                 const res = await api.put(`/api/trips/${tripId}/settle`);
+                 setIsPaid(res.data.is_settled === 1);
+               } catch (err) {
+                 console.error('Failed to settle trip:', err);
+               }
+             }}
+             className={`flex items-center justify-center gap-3 px-12 py-5 rounded-full font-black text-xs uppercase tracking-[0.2em] transition-all shadow-2xl active:scale-[0.98] ${
+               isPaid 
+               ? 'bg-white/10 text-white border border-white/20' 
+               : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/20'
+             }`}
+            >
+               {isPaid ? <CheckCircle size={20} /> : <FileText size={20} />}
+               {isPaid ? 'Payment Confirmed' : 'Mark as Settled'}
+            </button>
         </footer>
       </main>
 

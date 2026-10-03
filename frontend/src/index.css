@@ -1,5 +1,28 @@
 @import "tailwindcss";
 
+@layer utilities {
+  .text-white\/10,
+  .text-white\/5,
+  .text-white\/20,
+  .text-white\/30,
+  .text-white\/40,
+  .text-white\/50,
+  .text-white\/60,
+  .text-slate-500,
+  .text-slate-400,
+  .text-slate-600 {
+    color: #cbd5e1;
+  }
+
+  .text-emerald-400 {
+    color: #6ee7b7;
+  }
+
+  .text-emerald-500\/60 {
+    color: #6ee7b7;
+  }
+}
+
 @layer base {
   ::-webkit-scrollbar {
     width: 6px;

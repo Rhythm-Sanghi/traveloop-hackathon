@@ -1,19 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   MapPin,
-  Clock,
-  Wallet,
-  Calendar,
-  ArrowLeft,
-  ChevronRight,
   Loader2,
-  Share2,
-  Download,
-  MoreVertical,
-  Layers,
-  LayoutGrid,
-  Compass,
 } from 'lucide-react';
 import api from '../api';
 

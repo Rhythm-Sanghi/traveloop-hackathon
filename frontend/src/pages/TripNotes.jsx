@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   StickyNote,
   Plus,
@@ -7,7 +7,6 @@ import {
   Trash2,
   Calendar,
   Search,
-  Filter,
   ArrowLeft,
   ChevronDown,
   Loader2,
@@ -17,6 +16,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import api from '../api';
+import Navbar from '../components/Navbar';
 
 export default function TripNotes() {
   const navigate = useNavigate();
@@ -29,7 +29,6 @@ export default function TripNotes() {
   const [viewMode, setViewMode] = useState('all'); // all, byDay, byStop
   
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState('add'); // add, edit
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
@@ -79,16 +78,40 @@ export default function TripNotes() {
     );
   }, [notes, searchQuery]);
 
+  const openCreateModal = () => {
+    setEditingNoteId(null);
+    setFormData({ title: '', content: '', day_info: '' });
+    setIsModalOpen(true);
+  };
+
+  const handleEditNote = (note) => {
+    setEditingNoteId(note.id);
+    setFormData({
+      title: note.title,
+      content: note.content,
+      day_info: note.day_info || '',
+    });
+    setIsModalOpen(true);
+  };
+
   const handleAddNote = async (e) => {
     e.preventDefault();
     try {
-      const payload = { ...formData, trip_id: selectedTripId };
-      const response = await api.post('/api/notes', payload);
-      setNotes([response.data, ...notes]);
+      if (editingNoteId) {
+        // Edit flow
+        const response = await api.put(`/api/notes/${editingNoteId}`, formData);
+        setNotes(notes.map(n => n.id === editingNoteId ? response.data : n));
+        setEditingNoteId(null);
+      } else {
+        // Create flow
+        const payload = { ...formData, trip_id: selectedTripId };
+        const response = await api.post('/api/notes', payload);
+        setNotes([response.data, ...notes]);
+      }
       setIsModalOpen(false);
       setFormData({ title: '', content: '', day_info: '' });
     } catch (err) {
-      console.error('Error creating note:', err);
+      console.error('Error saving note:', err);
     }
   };
 
@@ -112,22 +135,7 @@ export default function TripNotes() {
 
   return (
     <div className="min-h-screen bg-[#0b0c14] text-white selection:bg-blue-500/30 pb-32">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0b0c14]/80 backdrop-blur-md border-b border-white/5 px-6 py-4 flex justify-between items-center">
-        <Link to="/dashboard" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-            <div className="w-4 h-4 bg-[#0b0c14] rounded-sm rotate-45" />
-          </div>
-          <span className="text-xl font-black tracking-tighter uppercase">Traveloop</span>
-        </Link>
-        <div className="flex items-center gap-6">
-           <Link to="/dashboard" className="text-xs font-black uppercase tracking-widest text-white/40 hover:text-white transition-colors">My Trips</Link>
-           <Link to="/community" className="text-xs font-black uppercase tracking-widest text-white/40 hover:text-white transition-colors">Community</Link>
-           <button onClick={() => navigate('/profile')} className="w-8 h-8 rounded-full bg-white/10 overflow-hidden border border-white/10">
-             <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Traveloop" alt="User" />
-           </button>
-        </div>
-      </nav>
+      <Navbar />
 
       <main className="max-w-4xl mx-auto px-6 pt-32 space-y-12">
         
@@ -142,7 +150,7 @@ export default function TripNotes() {
               </div>
               
               <button 
-                onClick={() => setIsModalOpen(true)}
+                onClick={openCreateModal}
                 className="flex items-center justify-center gap-3 px-8 py-4 bg-blue-600 rounded-full font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-blue-600/20 active:scale-95"
               >
                 <Plus size={18} />
@@ -241,9 +249,12 @@ export default function TripNotes() {
                            </p>
                         </div>
                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                           <button className="p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-blue-600/20 hover:text-blue-400 transition-all">
-                              <Pencil size={14} />
-                           </button>
+                           <button 
+                              onClick={() => handleEditNote(note)}
+                              className="p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-blue-600/20 hover:text-blue-400 transition-all"
+                            >
+                               <Pencil size={14} />
+                            </button>
                            <button 
                             onClick={() => handleDeleteNote(note.id)}
                             className="p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-red-500/20 hover:text-red-400 transition-all"
@@ -288,7 +299,7 @@ export default function TripNotes() {
 
               <div className="space-y-8">
                  <div className="space-y-2">
-                    <h2 className="text-3xl font-black uppercase tracking-tight">Create <span className="text-blue-500">Note</span></h2>
+                    <h2 className="text-3xl font-black uppercase tracking-tight">{editingNoteId ? 'Edit' : 'Create'} <span className="text-blue-500">Note</span></h2>
                     <p className="text-slate-500 text-xs font-medium uppercase tracking-widest">Journaling your journey</p>
                  </div>
 

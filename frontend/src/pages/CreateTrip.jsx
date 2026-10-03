@@ -1,18 +1,15 @@
-import React, { useState, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
-  Plus, 
   Calendar, 
-  MapPin, 
-  Image as ImageIcon, 
   Upload, 
   Loader2, 
   ChevronRight,
-  Globe,
   Compass,
   Wallet
 } from 'lucide-react';
 import api from "../api";
+import Navbar from '../components/Navbar';
 
 const CreateTrip = () => {
   const [formData, setFormData] = useState({
@@ -34,15 +31,33 @@ const CreateTrip = () => {
     setError('');
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setCoverPreview(reader.result);
-        setFormData(prev => ({ ...prev, image_url: reader.result }));
-      };
-      reader.readAsDataURL(file);
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isValidImage = file.type.startsWith('image/');
+    if (!isValidImage) {
+      setError('Please upload a valid image file.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Cover image must be smaller than 5MB.');
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const uploadRes = await api.post('/api/uploads/images', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const url = uploadRes.data.url;
+      setCoverPreview(url);
+      setFormData(prev => ({ ...prev, image_url: url }));
+      setError('');
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to upload cover image.');
     }
   };
 
@@ -70,6 +85,15 @@ const CreateTrip = () => {
     }
   };
 
+  const handleSelectSuggestion = (item) => {
+    setFormData(prev => ({
+      ...prev,
+      name: item.title,
+      image_url: item.img
+    }));
+    setCoverPreview(item.img);
+  };
+
   // Mock data for suggestions
   const suggestions = [
     { id: 1, title: 'Paris, France', category: 'City Lights', img: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&q=80&w=600' },
@@ -82,18 +106,7 @@ const CreateTrip = () => {
 
   return (
     <div className="min-h-screen bg-[#0b0c14] text-white selection:bg-blue-500/30">
-      {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0b0c14]/80 backdrop-blur-md border-b border-white/5 px-6 py-4 flex justify-between items-center">
-        <Link to="/dashboard" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-            <div className="w-4 h-4 bg-[#0b0c14] rounded-sm rotate-45" />
-          </div>
-          <span className="text-xl font-black tracking-tighter">TRAVELOOP</span>
-        </Link>
-        <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 shadow-lg overflow-hidden cursor-pointer hover:scale-110 transition-transform">
-          <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" />
-        </div>
-      </nav>
+      <Navbar />
 
       <main className="max-w-6xl mx-auto px-6 pt-32 pb-24">
         <div className="flex flex-col lg:flex-row gap-16">
@@ -260,7 +273,7 @@ const CreateTrip = () => {
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
             {suggestions.map((item) => (
-              <div key={item.id} className="group cursor-pointer">
+              <div key={item.id} onClick={() => handleSelectSuggestion(item)} className="group cursor-pointer">
                 <div className="relative aspect-4/3 rounded-3xl overflow-hidden mb-6 shadow-2xl">
                   <img 
                     src={item.img} 

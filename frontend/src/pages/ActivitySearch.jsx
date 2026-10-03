@@ -1,123 +1,158 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Search,
-  Filter,
   Clock,
   Tag,
   Plus,
   ChevronDown,
   X,
   Star,
-  MapPin,
-  ArrowLeft,
   SlidersHorizontal,
   Info,
+  Loader2,
+  CheckCircle2,
 } from 'lucide-react';
-
-const mockActivities = [
-  {
-    id: 1,
-    title: 'Sunrise Paragliding Over the Alps',
-    description: 'Experience the ultimate adrenaline rush as you soar above the snow-capped peaks of the Swiss Alps during a breathtaking sunrise.',
-    longDescription: 'Join our expert pilots for a once-in-a-lifetime paragliding adventure. We start before dawn to catch the first light hitting the peaks. You will glide for 45 minutes over pristine glaciers and alpine lakes. No experience required, as this is a tandem flight. All safety equipment and a Go-Pro video of your flight are included.',
-    category: 'Adventure',
-    cost: 'Luxury',
-    price: 350,
-    duration: '3 Hours',
-    rating: 4.9,
-    image: 'https://images.unsplash.com/photo-1533310266094-8898a03807dd?auto=format&fit=crop&w=800&q=80',
-    extraImages: [
-      'https://images.unsplash.com/photo-1524222717473-739b62a4b1d1?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80'
-    ]
-  },
-  {
-    id: 2,
-    title: 'Midnight Food Tour in Tokyo',
-    description: 'Discover the hidden culinary gems of Shinjuku and Shibuya after dark. Taste authentic ramen, yakitori, and local delicacies.',
-    longDescription: 'Tokyo comes alive at night, and its food scene is no exception. Our local guide will take you through narrow alleyways (Yokocho) to visit three award-winning eateries that only locals know about. Learn about the history of Japanese street food and enjoy sake pairings at each stop.',
-    category: 'Foodie',
-    cost: 'Mid-range',
-    price: 120,
-    duration: '4 Hours',
-    rating: 4.8,
-    image: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=800&q=80',
-    extraImages: [
-      'https://images.unsplash.com/photo-1542372147193-a7aca54189cd?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1582450871972-ab5ca641643d?auto=format&fit=crop&w=800&q=80'
-    ]
-  },
-  {
-    id: 3,
-    title: 'Ancient Mayan Ruins Expedition',
-    description: 'Step back in time as you explore the hidden temples of Tikal deep within the Guatemalan rainforest.',
-    longDescription: 'This expedition takes you off the beaten path to the heart of the Mayan civilization. Led by a professional archaeologist, you will climb the Great Jaguar Temple and witness the sunrise from Temple IV. Discover the secrets of Mayan astronomy and social structure while observing howler monkeys and toucans in their natural habitat.',
-    category: 'Culture',
-    cost: 'Mid-range',
-    price: 85,
-    duration: '6 Hours',
-    rating: 4.7,
-    image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80',
-    extraImages: [
-      'https://images.unsplash.com/photo-1531315630201-bb15abeb1653?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1533035353720-f1c6a75cd8ab?auto=format&fit=crop&w=800&q=80'
-    ]
-  },
-  {
-    id: 4,
-    title: 'Balinese Spa & Meditation Retreat',
-    description: 'Find your inner peace with a full day of traditional Balinese healing, yoga, and meditation in the heart of Ubud.',
-    longDescription: 'Escape the hustle and bustle of daily life in our tranquil jungle retreat. Your day begins with a gentle Vinyasa yoga session, followed by a traditional Balinese massage using local herbs and oils. Enjoy an organic plant-based lunch overlooking the Ayung River before concluding with a guided mindfulness meditation session.',
-    category: 'Relaxation',
-    cost: 'Luxury',
-    price: 280,
-    duration: 'Full Day',
-    rating: 5.0,
-    image: 'https://images.unsplash.com/photo-1544161515-4ae6ce6e8347?auto=format&fit=crop&w=800&q=80',
-    extraImages: [
-      'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1590523277543-a94d2e4eb00b?auto=format&fit=crop&w=800&q=80'
-    ]
-  },
-  {
-    id: 5,
-    title: 'Surfing the Skeleton Coast',
-    description: 'Ride the world-longest left-hand wave in the remote and hauntingly beautiful Namibia.',
-    longDescription: 'For experienced surfers looking for the ultimate challenge, the Skeleton Coast offers waves that go on for miles. This guided tour includes 4x4 transport across the desert, beach camping under the stars, and expert knowledge of the local swells and currents. A truly rugged and unforgettable surf adventure.',
-    category: 'Adventure',
-    cost: 'Budget',
-    price: 45,
-    duration: '5 Hours',
-    rating: 4.6,
-    image: 'https://images.unsplash.com/photo-1502680390469-be75c86b636f?auto=format&fit=crop&w=800&q=80',
-    extraImages: [
-      'https://images.unsplash.com/photo-1459749411177-ec427d62a484?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80'
-    ]
-  }
-];
+import api from '../api';
+import Navbar from '../components/Navbar';
 
 export default function ActivitySearch() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
   const query = searchParams.get('q') || '';
   
   const [searchInput, setSearchInput] = useState(query);
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [filterType, setFilterType] = useState('All');
   const [filterCost, setFilterCost] = useState('All');
+
+  // Trip selection integration state
+  const [trips, setTrips] = useState([]);
+  const [tripsLoading, setTripsLoading] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [targetActivity, setTargetActivity] = useState(null);
   
-  const filteredActivities = useMemo(() => {
-    return mockActivities.filter(activity => {
-      const matchesQuery = activity.title.toLowerCase().includes(query.toLowerCase()) || 
-                          activity.description.toLowerCase().includes(query.toLowerCase());
-      const matchesType = filterType === 'All' || activity.category === filterType;
-      const matchesCost = filterCost === 'All' || activity.cost === filterCost;
-      
-      return matchesQuery && matchesType && matchesCost;
-    });
-  }, [query, filterType, filterCost]);
+  const [selectedTripId, setSelectedTripId] = useState(null);
+  const [stops, setStops] = useState([]);
+  const [stopsLoading, setStopsLoading] = useState(false);
+  const [selectedStopId, setSelectedStopId] = useState(null);
+  const [addLoading, setAddLoading] = useState(false);
+  const [addSuccess, setAddSuccess] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [providerError, setProviderError] = useState('');
+
+  useEffect(() => {
+    const fetchTrips = async () => {
+      try {
+        setTripsLoading(true);
+        const res = await api.get('/api/trips');
+        setTrips(res.data || []);
+      } catch (err) {
+        console.error('Failed to fetch trips:', err);
+      } finally {
+        setTripsLoading(false);
+      }
+    };
+    fetchTrips();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedTripId) {
+      return undefined;
+    }
+
+    const fetchStops = async () => {
+      try {
+        setStopsLoading(true);
+        const res = await api.get(`/api/trips/${selectedTripId}/itinerary`);
+        setStops(res.data.stops || []);
+        if (res.data.stops && res.data.stops.length > 0) {
+          setSelectedStopId(res.data.stops[0].id);
+        } else {
+          setSelectedStopId(null);
+        }
+      } catch (err) {
+        console.error('Failed to fetch stops:', err);
+      } finally {
+        setStopsLoading(false);
+      }
+    };
+
+    fetchStops();
+    return undefined;
+  }, [selectedTripId]);
+
+  const handleConfirmAddActivity = async () => {
+    if (!selectedTripId || !selectedStopId || !targetActivity) return;
+    try {
+      setAddLoading(true);
+      await api.post(`/api/trips/${selectedTripId}/itinerary/stops/${selectedStopId}/activities`, {
+        name: targetActivity.title,
+        cost: parseFloat(targetActivity.price) || 0.0,
+        category: targetActivity.category || 'Sightseeing'
+      });
+      setAddSuccess(true);
+      setTimeout(() => {
+        setIsAddModalOpen(false);
+        setAddSuccess(false);
+        setTargetActivity(null);
+        setSelectedTripId(null);
+        setSelectedStopId(null);
+      }, 1000);
+    } catch (err) {
+      console.error('Failed to add activity:', err);
+    } finally {
+      setAddLoading(false);
+    }
+  };
+  
+  useEffect(() => {
+    const timeoutId = setTimeout(async () => {
+      try {
+        setSearchLoading(true);
+        const params = new URLSearchParams();
+        if (searchInput.trim()) params.set('q', searchInput.trim());
+        if (filterType !== 'All') params.set('category', filterType);
+        if (filterCost !== 'All') params.set('cost', filterCost);
+
+        if (!searchInput.trim()) {
+          setSearchResults([]);
+          setProviderError('');
+          return;
+        }
+        const res = await api.get('/api/search/places', {
+          params: { q: searchInput.trim(), limit: 20 },
+        });
+        setProviderError('');
+        setSearchResults((Array.isArray(res.data) ? res.data : []).map((place) => ({
+          id: place.provider_id || `${place.latitude}-${place.longitude}-${place.name}`,
+          title: place.name || place.address || searchInput.trim(),
+          category: 'Place',
+          description: place.address || 'Place discovered through the configured provider.',
+          image: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=1200&q=80',
+          rating: '—',
+          duration: 'Manual duration',
+          price: 0,
+          longDescription: place.address || '',
+          extraImages: [],
+          provider: place.provider,
+          provider_id: place.provider_id,
+        })));
+      } catch (err) {
+        console.error('Failed to fetch search results:', err);
+        setSearchResults([]);
+        setProviderError(err.response?.status === 503
+          ? 'Place discovery is unavailable. Add your activity manually instead.'
+          : 'Place discovery failed. Try again or add your activity manually.');
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 200);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchInput, filterType, filterCost]);
+
+  const filteredActivities = searchResults;
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -127,78 +162,76 @@ export default function ActivitySearch() {
   return (
     <div className="min-h-screen bg-[#0b0c14] text-white selection:bg-blue-500/30">
       
-      {/* Top Bar / Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0b0c14]/90 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row gap-6 items-center">
-          <button 
-            onClick={() => navigate('/dashboard')}
-            className="hidden md:flex items-center gap-2 text-white/40 hover:text-white transition-colors"
-          >
-            <ArrowLeft size={20} />
-            <span className="text-xs font-black uppercase tracking-widest">Back</span>
-          </button>
-
-          <form onSubmit={handleSearchSubmit} className="flex-1 w-full relative">
-            <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-white/20">
-              <Search size={20} strokeWidth={1.5} />
-            </div>
-            <input
-              type="text"
-              placeholder="Search for your next adventure..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-full py-4 pl-16 pr-6 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all placeholder:text-white/10"
-            />
-          </form>
-
-          <div className="flex items-center gap-3 overflow-x-auto w-full md:w-auto scrollbar-hide pb-2 md:pb-0">
-            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-xs font-black uppercase tracking-widest whitespace-nowrap">
-              <Tag size={14} className="text-blue-500" />
-              <span>Type:</span>
-              <select 
-                value={filterType} 
-                onChange={(e) => setFilterType(e.target.value)}
-                className="bg-transparent focus:outline-none cursor-pointer text-blue-400"
-              >
-                <option value="All">All</option>
-                <option value="Adventure">Adventure</option>
-                <option value="Foodie">Foodie</option>
-                <option value="Culture">Culture</option>
-                <option value="Relaxation">Relaxation</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-xs font-black uppercase tracking-widest whitespace-nowrap">
-              <SlidersHorizontal size={14} className="text-emerald-500" />
-              <span>Cost:</span>
-              <select 
-                value={filterCost} 
-                onChange={(e) => setFilterCost(e.target.value)}
-                className="bg-transparent focus:outline-none cursor-pointer text-emerald-400"
-              >
-                <option value="All">All</option>
-                <option value="Budget">Budget</option>
-                <option value="Mid-range">Mid-range</option>
-                <option value="Luxury">Luxury</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <Navbar />
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-6 pt-48 pb-32">
-        <header className="mb-12">
-          <h1 className="text-4xl font-black uppercase tracking-tight">
-            Discover <span className="text-blue-500">Experiences</span>
-          </h1>
-          <p className="text-slate-500 mt-2 font-medium">
-            Found {filteredActivities.length} activities matching your search
-          </p>
+      <main className="max-w-6xl mx-auto px-6 pt-32 pb-32">
+        <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-8 pb-8 border-b border-white/5">
+          <div className="space-y-2">
+            <h1 className="text-4xl font-black uppercase tracking-tight">
+              Discover <span className="text-blue-500">Experiences</span>
+            </h1>
+            <p className="text-slate-500 font-medium">
+              Found {filteredActivities.length} activities matching your search
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-4 items-center w-full md:w-auto">
+            <form onSubmit={handleSearchSubmit} className="relative w-full sm:w-80">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/20">
+                <Search size={16} strokeWidth={1.5} />
+              </div>
+              <input
+                type="text"
+                placeholder="Search experiences..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-full py-3.5 pl-10 pr-4 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all text-white placeholder:text-white/20"
+              />
+            </form>
+
+            <div className="flex items-center gap-3 overflow-x-auto w-full sm:w-auto scrollbar-hide pb-2 sm:pb-0">
+              <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">
+                <Tag size={12} className="text-blue-500" />
+                <span>Type:</span>
+                <select 
+                  value={filterType} 
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className="bg-transparent focus:outline-none cursor-pointer text-blue-400 font-bold"
+                >
+                  <option value="All">All</option>
+                  <option value="Adventure">Adventure</option>
+                  <option value="Foodie">Foodie</option>
+                  <option value="Culture">Culture</option>
+                  <option value="Relaxation">Relaxation</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">
+                <SlidersHorizontal size={12} className="text-emerald-500" />
+                <span>Cost:</span>
+                <select 
+                  value={filterCost} 
+                  onChange={(e) => setFilterCost(e.target.value)}
+                  className="bg-transparent focus:outline-none cursor-pointer text-emerald-400 font-bold"
+                >
+                  <option value="All">All</option>
+                  <option value="Budget">Budget</option>
+                  <option value="Mid-range">Mid-range</option>
+                  <option value="Luxury">Luxury</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </header>
 
         <div className="space-y-8">
-          {filteredActivities.length > 0 ? (
+          {searchLoading ? (
+            <div className="py-16 text-center text-slate-300">
+              <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin text-blue-500" />
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Searching itineraries…</p>
+            </div>
+          ) : filteredActivities.length > 0 ? (
             filteredActivities.map((activity) => (
               <div 
                 key={activity.id}
@@ -245,13 +278,42 @@ export default function ActivitySearch() {
                         <span className="text-xs font-black uppercase tracking-widest">${activity.price}</span>
                       </div>
                     </div>
-                    <button className="p-3 bg-blue-600 rounded-2xl hover:scale-110 active:scale-95 transition-all shadow-xl shadow-blue-600/20">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTargetActivity(activity);
+                        setIsAddModalOpen(true);
+                      }}
+                      className="p-3 bg-blue-600 rounded-2xl hover:scale-110 active:scale-95 transition-all shadow-xl shadow-blue-600/20"
+                    >
                       <Plus size={20} strokeWidth={3} />
                     </button>
                   </div>
                 </div>
               </div>
             ))
+          ) : providerError ? (
+            <div className="rounded-3xl border border-amber-400/20 bg-amber-400/10 p-8 text-center">
+              <p className="text-sm font-bold text-amber-200">{providerError}</p>
+              <button
+                type="button"
+                onClick={() => setSelectedActivity({
+                  id: `manual-${searchInput}`,
+                  title: searchInput.trim(),
+                  category: 'Manual',
+                  description: 'Manually entered activity',
+                  image: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=1200&q=80',
+                  rating: '—',
+                  duration: 'Set in itinerary',
+                  price: 0,
+                  longDescription: 'Add this activity to a trip and adjust its cost in the itinerary.',
+                  extraImages: [],
+                })}
+                className="mt-4 rounded-full bg-blue-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest"
+              >
+                Add manually
+              </button>
+            </div>
           ) : (
             <div className="py-24 text-center bg-white/1 border-2 border-dashed border-white/5 rounded-[3rem]">
                <Info size={48} className="mx-auto text-white/5 mb-6" />
@@ -328,11 +390,122 @@ export default function ActivitySearch() {
                     <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Total Cost</p>
                     <p className="text-3xl font-black text-emerald-400 tracking-tight">${selectedActivity.price}</p>
                   </div>
-                  <button className="px-12 py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-black text-xs uppercase tracking-widest transition-all shadow-2xl shadow-blue-600/20 active:scale-95">
+                  <button 
+                    onClick={() => {
+                      setTargetActivity(selectedActivity);
+                      setIsAddModalOpen(true);
+                      setSelectedActivity(null); // Close the preview modal
+                    }}
+                    className="px-12 py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-black text-xs uppercase tracking-widest transition-all shadow-2xl shadow-blue-600/20 active:scale-95"
+                  >
                     Add to Itinerary
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add to Itinerary Trip/Stop Selector Modal */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center px-6 py-20">
+          <div 
+            className="absolute inset-0 bg-[#0b0c14]/90 backdrop-blur-md"
+            onClick={() => setIsAddModalOpen(false)}
+          />
+          <div className="relative w-full max-w-md bg-[#161827] border border-white/10 rounded-[2.5rem] p-8 md:p-10 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <button 
+              onClick={() => setIsAddModalOpen(false)}
+              className="absolute top-6 right-6 p-2 bg-white/5 hover:bg-white/10 rounded-full transition-all"
+            >
+              <X size={16} />
+            </button>
+            
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500">Add To Itinerary</p>
+                <h3 className="text-2xl font-black uppercase tracking-tight">Select Trip & Stop</h3>
+                <p className="text-xs text-white/40 font-medium">
+                  Select where you want to add: <strong className="text-white">{targetActivity?.title}</strong>
+                </p>
+              </div>
+
+              {addSuccess ? (
+                <div className="py-8 flex flex-col items-center justify-center space-y-4">
+                  <CheckCircle2 size={48} className="text-emerald-500 animate-bounce" />
+                  <p className="text-sm font-black uppercase tracking-widest text-emerald-400">Added Successfully!</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Select Trip */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Choose Trip</label>
+                    <div className="relative">
+                      <select 
+                        value={selectedTripId || ''}
+                        onChange={(e) => setSelectedTripId(e.target.value ? parseInt(e.target.value) : null)}
+                        className="w-full appearance-none pl-6 pr-10 py-4 bg-[#0b0c14] border border-white/10 rounded-2xl text-xs font-black uppercase tracking-widest outline-none cursor-pointer hover:border-white/20 transition-all text-white bg-slate-900"
+                      >
+                        <option value="">-- Select Trip --</option>
+                        {tripsLoading ? (
+                          <option disabled>Loading trips...</option>
+                        ) : trips.length === 0 ? (
+                          <option disabled>No trips found</option>
+                        ) : (
+                          trips.map(trip => (
+                            <option key={trip.id} value={trip.id}>{trip.name}</option>
+                          ))
+                        )}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  {/* Select Stop */}
+                  {selectedTripId && (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Choose Stop</label>
+                      <div className="relative">
+                        <select 
+                          value={selectedStopId || ''}
+                          onChange={(e) => setSelectedStopId(e.target.value ? parseInt(e.target.value) : null)}
+                          className="w-full appearance-none pl-6 pr-10 py-4 bg-[#0b0c14] border border-white/10 rounded-2xl text-xs font-black uppercase tracking-widest outline-none cursor-pointer hover:border-white/20 transition-all text-white bg-slate-900"
+                        >
+                          <option value="">-- Select Stop --</option>
+                          {stopsLoading ? (
+                            <option disabled>Loading stops...</option>
+                          ) : stops.length === 0 ? (
+                            <option disabled>No stops for this trip</option>
+                          ) : (
+                            stops.map(stop => (
+                              <option key={stop.id} value={stop.id}>{stop.city_name} ({stop.arrival_date})</option>
+                            ))
+                          )}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none" />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-4 flex gap-4">
+                    <button 
+                      onClick={() => setIsAddModalOpen(false)}
+                      className="flex-1 py-4 border border-white/10 rounded-full text-xs font-black uppercase tracking-widest hover:bg-white/5 transition-all text-white/60"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      onClick={handleConfirmAddActivity}
+                      disabled={addLoading || !selectedTripId || !selectedStopId}
+                      className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-black uppercase tracking-widest transition-all shadow-xl shadow-blue-600/10 active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
+                    >
+                      {addLoading && <Loader2 size={14} className="animate-spin" />}
+                      Add to Stop
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

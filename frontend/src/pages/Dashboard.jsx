@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import {
-  User,
   MapPin,
   Search,
   Calendar,
@@ -15,15 +14,15 @@ import {
   Camera,
   Plane,
   Compass,
-  ChevronDown,
   Users,
-  Globe,
   ArrowRight,
   Wallet,
   Share2,
-  BarChart3,
+  X,
+  Loader2,
 } from 'lucide-react';
 import api from '../api';
+import Navbar from '../components/Navbar';
 
 const categoryItems = [
   { id: 'camping', label: 'Camping', icon: TentTree },
@@ -132,6 +131,136 @@ const TripCardSkeleton = () => (
   </div>
 );
 
+// Curated destination templates mapping
+const DESTINATION_TEMPLATES = {
+  1: {
+    title: 'Kyoto Neon Nights',
+    description: 'Embark on a cyberpunk-meets-traditional journey through the lantern-lit streets of Kyoto, from historic shrines to hidden basement ramen counters.',
+    duration: 5,
+    city_name: 'Kyoto, Japan',
+    image: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=800&q=80',
+    budget: 25000,
+    stops: [
+      {
+        city_name: 'Kyoto, Japan',
+        description: 'Explore ancient shrines and neon streetscapes.',
+        budget: 25000,
+        activities: [
+          { name: 'Fushimi Inari Shrine Hike', cost: 0, category: 'Culture' },
+          { name: 'Kiyomizu-dera Temple Sunset Tour', cost: 400, category: 'Culture' },
+          { name: 'Underground Ramen Tasting', cost: 1500, category: 'Food' },
+          { name: 'Gion District Walk', cost: 0, category: 'Sightseeing' }
+        ]
+      }
+    ]
+  },
+  2: {
+    title: 'Patagonian Ice Treks',
+    description: "Conquer the windswept trails of El Chaltén and hike beside colossal glaciers in Argentina's dramatic mountain wilderness.",
+    duration: 7,
+    city_name: 'El Chaltén, Argentina',
+    image: 'https://images.unsplash.com/photo-1517021897933-0e0319cfbc28?auto=format&fit=crop&w=800&q=80',
+    budget: 45000,
+    stops: [
+      {
+        city_name: 'El Chaltén, Argentina',
+        description: 'Mountain peaks and glacial trails.',
+        budget: 45000,
+        activities: [
+          { name: 'Mount Fitz Roy Trail Trek', cost: 0, category: 'Adventure' },
+          { name: 'Perito Moreno Glacier Walk', cost: 15000, category: 'Adventure' },
+          { name: 'Laguna de los Tres Hike', cost: 0, category: 'Adventure' },
+          { name: 'Traditional Argentine BBQ Dinner', cost: 5000, category: 'Food' }
+        ]
+      }
+    ]
+  },
+  3: {
+    title: 'Icelandic Aurora Basecamp',
+    description: 'Witness the northern lights dancing across glaciers, soak in thermal lagoons, and camp under the volcanic Icelandic night sky.',
+    duration: 6,
+    city_name: 'Reykjavik, Iceland',
+    image: 'https://images.unsplash.com/photo-1579033461380-adb47c3eb938?auto=format&fit=crop&w=800&q=80',
+    budget: 60000,
+    stops: [
+      {
+        city_name: 'Reykjavik, Iceland',
+        description: 'Soak in thermal basins and seek aurora.',
+        budget: 60000,
+        activities: [
+          { name: 'Golden Circle Scenic Drive', cost: 5000, category: 'Sightseeing' },
+          { name: 'Blue Lagoon Thermal Baths', cost: 9000, category: 'Relaxation' },
+          { name: 'Northern Lights Basecamp Hunt', cost: 4000, category: 'Adventure' },
+          { name: 'Glacier Cave Exploration', cost: 15000, category: 'Adventure' }
+        ]
+      }
+    ]
+  },
+  4: {
+    title: 'Maldives Crystal Coasts',
+    description: 'Unwind on pristine white beaches, swim with sea turtles, and wake up in a private overwater bungalow surrounded by ocean.',
+    duration: 5,
+    city_name: 'Male, Maldives',
+    image: 'https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&w=800&q=80',
+    budget: 80000,
+    stops: [
+      {
+        city_name: 'Male, Maldives',
+        description: 'Relax in beach villas and snorkel coral reefs.',
+        budget: 80000,
+        activities: [
+          { name: 'Coral Reef Snorkeling Cruise', cost: 3000, category: 'Adventure' },
+          { name: 'Sandbank Picnic Lunch', cost: 5000, category: 'Food' },
+          { name: 'Sunset Dhoni Catamaran Sail', cost: 4000, category: 'Sightseeing' },
+          { name: 'Lagoon Sunrise Yoga Session', cost: 1500, category: 'Relaxation' }
+        ]
+      }
+    ]
+  },
+  5: {
+    title: 'Amazonian Canopy Trails',
+    description: 'Walk suspended bridge trails 50 meters above the jungle floor, boat through bio-diverse river inlets, and spot bioluminescent plants.',
+    duration: 6,
+    city_name: 'Iquitos, Peru',
+    image: 'https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&w=800&q=80',
+    budget: 35000,
+    stops: [
+      {
+        city_name: 'Iquitos, Peru',
+        description: 'Jungle hikes and wildlife canopy walks.',
+        budget: 35000,
+        activities: [
+          { name: 'Suspension Bridge Canopy Walkway', cost: 2500, category: 'Adventure' },
+          { name: 'Pink River Dolphin Boat Tour', cost: 3500, category: 'Sightseeing' },
+          { name: 'Night Jungle Expedition Hike', cost: 2000, category: 'Adventure' },
+          { name: 'Indigenous Tribe Cultural Visit', cost: 1500, category: 'Culture' }
+        ]
+      }
+    ]
+  },
+  6: {
+    title: 'Bangkok Street Food',
+    description: "Navigate neon night markets, sip local Singha on rooftop bars, and eat your way through Bangkok's world-famous street food culture.",
+    duration: 4,
+    city_name: 'Bangkok, Thailand',
+    image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80',
+    budget: 15000,
+    stops: [
+      {
+        city_name: 'Bangkok, Thailand',
+        description: 'Street food markets and temple views.',
+        budget: 15000,
+        activities: [
+          { name: 'Chinatown Midnight Food Safari', cost: 1500, category: 'Food' },
+          { name: 'Wat Arun Temple Dusk View', cost: 200, category: 'Culture' },
+          { name: 'Chao Phraya River Cruise Dinner', cost: 2500, category: 'Food' },
+          { name: 'Chatuchak Weekend Market Tour', cost: 0, category: 'Sightseeing' }
+        ]
+      }
+    ]
+  }
+};
+
 const Dashboard = () => {
   const token = localStorage.getItem('token') || localStorage.getItem('access_token');
   const navigate = useNavigate();
@@ -140,6 +269,62 @@ const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  
+  // Curated templates state
+  const [activeTemplate, setActiveTemplate] = useState(null);
+  const [creatingFromTemplate, setCreatingFromTemplate] = useState(false);
+
+  const handleCreateFromTemplate = async (templateId) => {
+    const template = DESTINATION_TEMPLATES[templateId];
+    if (!template) return;
+
+    try {
+      setCreatingFromTemplate(true);
+      
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setDate(startDate.getDate() + template.duration);
+      
+      const startDateStr = startDate.toISOString().split('T')[0];
+      const endDateStr = endDate.toISOString().split('T')[0];
+
+      // 1. Create the trip shell
+      const tripRes = await api.post('/api/trips', {
+        name: template.title,
+        start_date: startDateStr,
+        end_date: endDateStr,
+        total_budget: template.budget,
+        image_url: template.image
+      });
+
+      const newTripId = tripRes.data.trip_id;
+
+      // 2. Populate stops and activities
+      const formattedStops = template.stops.map(stop => ({
+        city_name: stop.city_name,
+        arrival_date: startDateStr,
+        departure_date: endDateStr,
+        budget: stop.budget,
+        description: stop.description,
+        activities: stop.activities.map(act => ({
+          name: act.name,
+          cost: act.cost,
+          category: act.category
+        }))
+      }));
+
+      await api.post(`/api/trips/${newTripId}/itinerary`, {
+        stops: formattedStops
+      });
+
+      setActiveTemplate(null);
+      navigate(`/trip/${newTripId}/view`);
+    } catch (err) {
+      console.error("Failed to create trip from template:", err);
+    } finally {
+      setCreatingFromTemplate(false);
+    }
+  };
 
   const username = useMemo(() => {
     const storedUsername = localStorage.getItem('username');
@@ -169,7 +354,7 @@ const Dashboard = () => {
       }
     };
     if (token) fetchTrips();
-  }, [token]);
+  }, [token, navigate]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -182,68 +367,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-[#0b0c14] text-white selection:bg-blue-500/30">
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0b0c14]/80 px-6 py-4 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <Link to="/dashboard" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-              <div className="w-4 h-4 bg-[#0b0c14] rounded-sm rotate-45" />
-            </div>
-            <span className="text-xl font-black tracking-tighter">TRAVELOOP</span>
-          </Link>
-
-          <div className="hidden md:flex items-center gap-8">
-            <button 
-              onClick={() => navigate('/dashboard')} 
-              className="text-xs font-black uppercase tracking-widest text-white border-b-2 border-blue-500 pb-1"
-            >
-              Explore
-            </button>
-            <button 
-              onClick={() => navigate('/community')} 
-              className="text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
-            >
-              Community
-            </button>
-            <button 
-              onClick={() => navigate('/packing-list')} 
-              className="text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
-            >
-              Packing List
-            </button>
-            {localStorage.getItem('is_admin') === 'true' && (
-              <button 
-                onClick={() => navigate('/admin')} 
-                className="text-xs font-black uppercase tracking-widest text-blue-500 hover:text-blue-400 transition-colors"
-              >
-                Admin
-              </button>
-            )}
-            <button 
-              onClick={() => navigate('/notes')} 
-              className="text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
-            >
-              Journal
-            </button>
-          </div>
-
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => navigate('/profile')}
-              className="group flex items-center gap-3 rounded-full border border-white/10 bg-white/5 p-1 transition hover:bg-white/10 hover:border-white/20 active:scale-95"
-            >
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white shadow-inner overflow-hidden">
-                <img
-                  src="https://api.dicebear.com/7.x/avataaars/svg?seed=Traveloop"
-                  alt="User avatar"
-                  className="h-full w-full object-cover"
-                />
-              </div>
-              <ChevronDown className="h-4 w-4 text-white/40 mr-2 group-hover:text-white transition-colors" />
-            </button>
-          </div>
-        </div>
-      </nav>
+      <Navbar />
 
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-16 px-6 pb-32 pt-28 sm:px-8">
         <section className="relative overflow-hidden rounded-4xl group">
@@ -263,7 +387,7 @@ const Dashboard = () => {
               onSubmit={handleSearch}
               className="mt-6 flex w-full max-w-2xl items-center rounded-full bg-white/5 backdrop-blur-md px-6 py-4 border border-white/10 shadow-2xl focus-within:ring-2 focus-within:ring-blue-500/20 transition-all group"
             >
-              <Search className="mr-4 h-5 w-5 text-white/40 group-focus-within:text-blue-400 transition-colors" />
+              <Search className="mr-4 h-5 w-5 text-white/60 group-focus-within:text-blue-400 transition-colors" />
               <input
                 type="text"
                 placeholder="Search destinations, stays, or experiences"
@@ -284,7 +408,7 @@ const Dashboard = () => {
             <div className="flex gap-2">
               <button 
                 onClick={() => setSelectedCategory(null)}
-                className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${!selectedCategory ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-500 hover:text-white'}`}
+                className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${!selectedCategory ? 'bg-blue-600 text-white' : 'bg-[#1b1d2a] text-slate-200 hover:bg-[#25283a] hover:text-white'}`}
               >
                 All
               </button>
@@ -292,7 +416,7 @@ const Dashboard = () => {
                 <button
                   key={cat.id}
                   onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${selectedCategory === cat.id ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-500 hover:text-white'}`}
+                  className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${selectedCategory === cat.id ? 'bg-blue-600 text-white' : 'bg-[#1b1d2a] text-slate-200 hover:bg-[#25283a] hover:text-white'}`}
                 >
                   {cat.label}
                 </button>
@@ -306,6 +430,7 @@ const Dashboard = () => {
               .map((dest) => (
               <div
                 key={dest.id}
+                onClick={() => setActiveTemplate(dest.id)}
                 className="min-w-[320px] h-100 snap-center rounded-4xl overflow-hidden relative group cursor-pointer transition-all duration-500 hover:scale-[1.02] hover:-rotate-1 active:scale-[0.98]"
               >
                 <img 
@@ -330,7 +455,7 @@ const Dashboard = () => {
                   <h3 className="text-2xl font-black uppercase tracking-tight leading-none group-hover:text-blue-400 transition-colors">
                     {dest.title}
                   </h3>
-                  <button className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/40 group-hover:text-white transition-colors">
+                  <button className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/60 group-hover:text-white transition-colors cursor-pointer">
                     Explore Details <ArrowRight size={14} />
                   </button>
                 </div>
@@ -398,15 +523,7 @@ const Dashboard = () => {
                 return (
                   <article
                     key={trip.id}
-                    role="button"
-                    tabIndex={0}
                     onClick={() => navigate(`/trip/${trip.id}/edit`)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        navigate(`/trip/${trip.id}/edit`);
-                      }
-                    }}
                     className="group cursor-pointer overflow-hidden rounded-3xl border border-white/10 bg-[#161827] shadow-2xl transition-all hover:scale-[1.02] active:scale-[0.98]"
                   >
                     <div className="relative h-48 w-full overflow-hidden">
@@ -426,15 +543,15 @@ const Dashboard = () => {
                         <span>{formatTripDates(trip.start_date, trip.end_date)}</span>
                       </div>
 
-                        <div className="pt-4 border-t border-white/5 flex gap-2">
+                        <div className="pt-4 border-t border-white/5 flex gap-1.5">
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
                               navigate(`/trip/${trip.id}/budget`);
                             }}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-xs font-black uppercase tracking-widest text-slate-300 transition-all group"
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-300 transition-all group"
                           >
-                             <Wallet size={14} className="text-emerald-500" />
+                             <Wallet size={12} className="text-emerald-500" />
                              Budget
                           </button>
                           <button 
@@ -442,10 +559,25 @@ const Dashboard = () => {
                               e.stopPropagation();
                               navigate(`/trip/${trip.id}/view`);
                             }}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-xs font-black uppercase tracking-widest text-slate-300 transition-all group"
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-300 transition-all group"
                           >
-                             <Compass size={14} className="text-blue-500" />
+                             <Compass size={12} className="text-blue-500" />
                              View
+                          </button>
+                          <button 
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const res = await api.post(`/api/trips/${trip.id}/publish`);
+                                setTrips(prev => prev.map(t => t.id === trip.id ? { ...t, is_public: res.data.is_public } : t));
+                              } catch (err) {
+                                console.error("Failed to toggle publish:", err);
+                              }
+                            }}
+                            className={`flex-1 flex items-center justify-center gap-1 py-2 border rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${trip.is_public === 1 ? 'bg-blue-600/20 border-blue-500/30 text-blue-400 hover:bg-blue-600/30' : 'bg-white/5 border-white/10 text-slate-200 hover:text-white'}`}
+                          >
+                             <Share2 size={12} />
+                             {trip.is_public === 1 ? 'Public' : 'Private'}
                           </button>
                         </div>
                     </div>
@@ -464,8 +596,104 @@ const Dashboard = () => {
         <Plus size={20} strokeWidth={3} className="group-hover:rotate-90 transition-transform" />
         Plan a trip
       </Link>
-    </div>
 
+      {/* Curated Destination Template Details Modal */}
+      {activeTemplate && (() => {
+        const template = DESTINATION_TEMPLATES[activeTemplate];
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="bg-[#161827] border border-white/10 rounded-[2.5rem] max-w-lg w-full overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.8)] relative flex flex-col max-h-[85vh]">
+              {/* Cover Photo */}
+              <div className="h-48 w-full overflow-hidden relative flex-shrink-0">
+                <img src={template.image} alt={template.title} className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#161827] to-transparent" />
+                <button 
+                  onClick={() => setActiveTemplate(null)}
+                  className="absolute top-4 right-4 p-2.5 bg-black/40 backdrop-blur-md border border-white/10 rounded-full text-white hover:bg-white/10 transition-all cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Template Body */}
+              <div className="flex-1 p-8 overflow-y-auto space-y-6">
+                <div className="space-y-2">
+                  <span className="px-2.5 py-1 bg-blue-500/20 border border-blue-500/30 rounded-full text-[8px] font-black uppercase tracking-widest text-blue-400">
+                    Curated Destination
+                  </span>
+                  <h3 className="text-3xl font-black uppercase tracking-tight text-white leading-none">
+                    {template.title}
+                  </h3>
+                </div>
+
+                <p className="text-slate-400 text-sm leading-relaxed font-medium">
+                  {template.description}
+                </p>
+
+                <div className="grid grid-cols-2 gap-4 bg-white/[0.01] border border-white/5 p-4 rounded-2xl">
+                  <div>
+                    <span className="text-[8px] font-black uppercase tracking-widest text-white/30">Average Duration</span>
+                    <p className="text-sm font-black text-white">{template.duration} Days</p>
+                  </div>
+                  <div>
+                    <span className="text-[8px] font-black uppercase tracking-widest text-white/30">Estimated Budget</span>
+                    <p className="text-sm font-black text-emerald-400">₹{template.budget.toLocaleString()}</p>
+                  </div>
+                </div>
+
+                {/* Planned Stop & Activities */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-300">Planned Itinerary Stops</h4>
+                  {template.stops.map((stop, sIdx) => (
+                    <div key={sIdx} className="space-y-3 bg-white/5 border border-white/10 rounded-2xl p-6">
+                      <div className="flex items-center gap-2">
+                        <MapPin size={14} className="text-blue-400" />
+                        <span className="font-black text-xs uppercase tracking-wider">{stop.city_name}</span>
+                      </div>
+                      <p className="text-slate-300 text-xs font-medium">{stop.description}</p>
+                      
+                      <div className="pt-3 border-t border-white/5 space-y-2">
+                        <span className="text-[8px] font-black uppercase tracking-widest text-white/30 block mb-1">Activities Included:</span>
+                        {stop.activities.map((act, aIdx) => (
+                          <div key={aIdx} className="flex justify-between items-center text-xs">
+                            <span className="text-slate-300 font-bold">• {act.name}</span>
+                            <span className="text-slate-300 font-medium">{act.cost > 0 ? `₹${act.cost}` : 'Free'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Template CTA */}
+              <div className="p-8 border-t border-white/5 bg-white/[0.01] flex gap-4 flex-shrink-0">
+                <button
+                  onClick={() => setActiveTemplate(null)}
+                  className="flex-1 py-4 border border-white/10 hover:bg-white/5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleCreateFromTemplate(activeTemplate)}
+                  disabled={creatingFromTemplate}
+                  className="flex-[2] py-4 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 cursor-pointer"
+                >
+                  {creatingFromTemplate ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin" />
+                      Creating Trip...
+                    </>
+                  ) : (
+                    'Use this Template'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
   );
 };
 

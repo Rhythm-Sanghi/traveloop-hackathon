@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Lock, ArrowRight, Loader2 } from 'lucide-react';
 import api from '../api';
@@ -32,7 +32,8 @@ export default function AuthPage() {
         localStorage.setItem('token', token);
         localStorage.setItem('access_token', token); // Keep for legacy
         localStorage.setItem('is_admin', isAdmin ? 'true' : 'false');
-        console.log("Auth: Token and Admin status saved to localStorage");
+        localStorage.setItem('username', username);
+        console.log("Auth: Token, Admin, and Username status saved to localStorage");
         navigate('/dashboard'); // Go to dashboard on success
       } else {
         // FastAPI Register requires JSON
@@ -42,7 +43,7 @@ export default function AuthPage() {
         const loginFormData = new URLSearchParams();
         loginFormData.append('username', username);
         loginFormData.append('password', password);
-
+ 
         const loginResponse = await api.post('/login', loginFormData, {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         });
@@ -53,7 +54,8 @@ export default function AuthPage() {
         localStorage.setItem('token', token);
         localStorage.setItem('access_token', token);
         localStorage.setItem('is_admin', isAdmin ? 'true' : 'false');
-        console.log("Auth: Registration complete, token and admin status saved");
+        localStorage.setItem('username', username);
+        console.log("Auth: Registration complete, token, admin, and username status saved");
         
         // Navigate directly to registration profile onboarding screen
         navigate('/register-profile');
@@ -99,7 +101,7 @@ export default function AuthPage() {
         {/* The Form */}
         <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
           <div className="space-y-2">
-            <label className="text-xs font-black uppercase tracking-widest text-white/40 ml-1">Username</label>
+            <label className="text-xs font-black uppercase tracking-widest text-white/60 ml-1">Username</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/20">
                 <User size={20} />
@@ -116,7 +118,7 @@ export default function AuthPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-black uppercase tracking-widest text-white/40 ml-1">Password</label>
+            <label className="text-xs font-black uppercase tracking-widest text-white/60 ml-1">Password</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/20">
                 <Lock size={20} />
@@ -131,14 +133,6 @@ export default function AuthPage() {
               />
             </div>
           </div>
-
-          {isLogin && (
-            <div className="flex justify-end">
-              <button type="button" className="text-xs font-black uppercase tracking-widest text-white/40 hover:text-white transition-colors">
-                Forgot Password?
-              </button>
-            </div>
-          )}
 
           <button
             type="submit"
@@ -173,6 +167,7 @@ export default function AuthPage() {
         </div>
 
       </div>
+
     </div>
   );
 }

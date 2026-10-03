@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   MapPin,
   Clock,
   Wallet,
   Calendar,
   ArrowLeft,
-  ChevronRight,
   Loader2,
   Share2,
   Download,
@@ -17,6 +16,8 @@ import {
   Banknote,
 } from 'lucide-react';
 import api from '../api';
+import Navbar from '../components/Navbar';
+import { resolveApiUrl } from '../utils/media';
 
 export default function TripDetailView() {
   const { tripId } = useParams();
@@ -24,40 +25,79 @@ export default function TripDetailView() {
   const [trip, setTrip] = useState(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'calendar'
+  const [isPublic, setIsPublic] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [isOfflineSnapshot, setIsOfflineSnapshot] = useState(false);
+  const cacheKey = useMemo(
+    () => `traveloop:private:${localStorage.getItem('auth_user_id') || localStorage.getItem('username')}:trip:${tripId}:itinerary`,
+    [tripId],
+  );
+
+  const getImageUrl = (url) => {
+    return resolveApiUrl(url, "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=2000&q=80");
+  };
+
+  const fetchTripData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await api.get(`/api/trips/${tripId}/itinerary`);
+      setTrip(response.data);
+      setIsPublic(response.data.is_public === 1);
+      localStorage.setItem(cacheKey, JSON.stringify({
+        trip: response.data,
+        savedAt: new Date().toISOString(),
+      }));
+      setIsOfflineSnapshot(false);
+    } catch (err) {
+      console.error('Error fetching trip details:', err);
+      try {
+        const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+        if (cached?.trip) {
+          setTrip(cached.trip);
+          setIsPublic(cached.trip.is_public === 1);
+          setIsOfflineSnapshot(true);
+        }
+      } catch (cacheError) {
+        console.error('Trip offline snapshot could not be read:', cacheError);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [tripId, cacheKey]);
 
   useEffect(() => {
-    const fetchTripData = async () => {
-      try {
-        setLoading(true);
-        const response = await api.get(`/api/trips/${tripId}/itinerary`);
-        setTrip(response.data);
-      } catch (err) {
-        console.error('Error fetching trip details:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
+    queueMicrotask(fetchTripData);
+  }, [fetchTripData]);
 
-    fetchTripData();
-  }, [tripId]);
+  const handlePublishToggle = async () => {
+    if (isOfflineSnapshot) return;
+    try {
+      const response = await api.post(`/api/trips/${tripId}/publish`);
+      setIsPublic(response.data.is_public === 1);
+    } catch (err) {
+      console.error('Error toggling trip publish status:', err);
+    }
+  };
+
+  const handleCopyLink = () => {
+    const publicUrl = `${window.location.origin}/trip/public/${tripId}`;
+    navigator.clipboard.writeText(publicUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const totalStats = useMemo(() => {
     if (!trip || !trip.stops) return { budget: 0, days: 0 };
     
-    // Core Budget Calculation Logic:
-    // 1. Sum up stop-level budgets
-    // 2. Sum up individual activity costs within each stop
     const totalCost = trip.stops.reduce((sum, stop) => {
       const stopBudget = parseFloat(stop.budget) || 0;
       const activitiesCost = (stop.activities || []).reduce((acc, act) => {
-          // Handle both legacy string format and new object format
           const cost = typeof act === 'object' ? parseFloat(act.cost) || 0 : 0;
           return acc + cost;
       }, 0);
       return sum + stopBudget + activitiesCost;
     }, 0);
     
-    // Calculate total days from start and end date
     const start = new Date(trip.start_date);
     const end = new Date(trip.end_date);
     const diffTime = Math.abs(end - start);
@@ -66,15 +106,35 @@ export default function TripDetailView() {
     return { budget: totalCost, days };
   }, [trip]);
 
-  // Mock Calendar Days
+  // Dynamic Calendar Days based on trip duration with padding for weekdays
   const calendarDays = useMemo(() => {
+    if (!trip || !trip.start_date || !trip.end_date) return [];
     const days = [];
     const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    for (let i = 1; i <= 31; i++) {
-      days.push({ day: i, weekday: weekdays[i % 7] });
+    const start = new Date(trip.start_date);
+    const end = new Date(trip.end_date);
+    
+    // Add empty padding days to align with starting day of the week
+    const startDayOfWeek = start.getDay(); // 0 (Sun) to 6 (Sat)
+    for (let i = 0; i < startDayOfWeek; i++) {
+      days.push({ isPadding: true });
+    }
+    
+    const current = new Date(start);
+    let count = 0;
+    while (current <= end && count < 90) { // Limit to 90 days max
+      days.push({
+        dateString: current.toISOString().split('T')[0],
+        day: current.getDate(),
+        month: current.toLocaleString('default', { month: 'short' }),
+        weekday: weekdays[current.getDay()],
+        isPadding: false
+      });
+      current.setDate(current.getDate() + 1);
+      count++;
     }
     return days;
-  }, []);
+  }, [trip]);
 
   if (loading) {
     return (
@@ -100,18 +160,19 @@ export default function TripDetailView() {
 
   return (
     <div className="min-h-screen bg-[#0b0c14] text-white selection:bg-blue-500/30 pb-32">
+      <Navbar />
       
       {/* Hero Header */}
       <section className="relative h-[50vh] min-h-[400px] w-full overflow-hidden">
         <img 
-          src="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=2000&q=80" 
+          src={getImageUrl(trip.image_url)} 
           alt="Destination" 
           className="w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0b0c14] via-[#0b0c14]/60 to-transparent" />
         
         {/* Top Controls */}
-        <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-20">
+        <div className="absolute top-24 left-0 right-0 p-6 flex justify-between items-center z-20">
           <button 
             onClick={() => navigate(`/trip/${tripId}/edit`)}
             className="flex items-center gap-2 px-5 py-2.5 bg-black/40 backdrop-blur-md border border-white/10 rounded-full hover:bg-black/60 transition-all group"
@@ -120,11 +181,23 @@ export default function TripDetailView() {
             <span className="text-xs font-black uppercase tracking-widest">Back to Builder</span>
           </button>
 
-          <div className="flex gap-3">
-            <button className="p-2.5 bg-black/40 backdrop-blur-md border border-white/10 rounded-full hover:bg-white/10 transition-all">
-              <Share2 size={18} />
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={handlePublishToggle}
+              className={`px-4 py-2 border rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${isPublic ? 'bg-blue-600/30 border-blue-500 text-blue-400 hover:bg-blue-600/50' : 'bg-white/5 border-white/10 text-white/40 hover:text-white hover:bg-white/10'}`}
+            >
+              {isPublic ? '🌐 Public Feed' : '🔒 Private'}
             </button>
-            <button className="p-2.5 bg-black/40 backdrop-blur-md border border-white/10 rounded-full hover:bg-white/10 transition-all">
+            {isPublic && (
+              <button 
+                onClick={handleCopyLink}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all active:scale-95 shadow-md shadow-emerald-500/10"
+              >
+                <Share2 size={12} />
+                {copied ? 'Copied!' : 'Copy Link'}
+              </button>
+            )}
+            <button aria-label="Download itinerary" className="p-2.5 bg-black/40 backdrop-blur-md border border-white/10 rounded-full hover:bg-white/10 transition-all">
               <Download size={18} />
             </button>
           </div>
@@ -175,13 +248,18 @@ export default function TripDetailView() {
 
       {/* Content Section */}
       <main className="max-w-4xl mx-auto px-6 py-20 relative min-h-[600px]">
+        {isOfflineSnapshot && (
+          <div className="mb-8 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-5 py-4 text-xs font-bold text-amber-200">
+            Travel Mode: showing the last saved itinerary snapshot. Editing and publishing require a connection.
+          </div>
+        )}
         {viewMode === 'list' ? (
           <div className="relative animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Timeline Line */}
             <div className="absolute left-10 top-20 bottom-20 w-[1px] bg-gradient-to-b from-blue-500/50 via-white/10 to-transparent hidden md:block" />
 
             <div className="space-y-24 relative z-10">
-              {trip.stops && trip.stops.map((stop, index) => (
+              {trip.stops && trip.stops.map((stop) => (
                 <div key={stop.id} className="space-y-10 group">
                   
                   {/* City Header */}
@@ -238,7 +316,7 @@ export default function TripDetailView() {
                                  <p className="text-[8px] font-black text-white/20 uppercase tracking-widest">Est. Cost</p>
                                </div>
                              )}
-                            <button className="p-2 text-white/20 hover:text-white transition-colors">
+                            <button aria-label={`More options for ${typeof activity === 'object' ? activity.name : activity}`} className="p-2 text-white/20 hover:text-white transition-colors">
                               <MoreVertical size={20} />
                             </button>
                           </div>
@@ -292,16 +370,20 @@ export default function TripDetailView() {
               {/* Calendar Grid */}
               <div className="grid grid-cols-7 min-h-[400px]">
                 {calendarDays.map((item, i) => {
+                   if (item.isPadding) {
+                     return <div key={i} className="aspect-square border-r border-b border-white/5 bg-white/[0.01]" />;
+                   }
+
                    const stopOnThisDay = trip.stops?.find(s => {
-                      const arrival = new Date(s.arrival_date).getDate();
-                      const departure = new Date(s.departure_date).getDate();
-                      return item.day >= arrival && item.day <= departure;
+                      return item.dateString >= s.arrival_date && item.dateString <= s.departure_date;
                    });
 
+                   const isFirstOfMonthOrTrip = i === 0 || (calendarDays[i-1] && !calendarDays[i-1].isPadding && calendarDays[i-1].month !== item.month);
+
                    return (
-                    <div key={i} className="aspect-square border-r border-b border-white/5 p-4 relative group">
-                      <span className={`text-xs font-bold ${stopOnThisDay ? 'text-white' : 'text-white/10'} group-hover:text-blue-400 transition-colors`}>
-                        {item.day}
+                    <div key={i} className="aspect-square border-r border-b border-white/5 p-4 relative group hover:bg-white/[0.02] transition-colors">
+                      <span className={`text-xs font-bold ${stopOnThisDay ? 'text-white' : 'text-white/20'} group-hover:text-blue-400 transition-colors`}>
+                        {isFirstOfMonthOrTrip ? `${item.month} ${item.day}` : item.day}
                       </span>
                       
                       {stopOnThisDay && (

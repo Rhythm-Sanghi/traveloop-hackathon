@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Share2,
@@ -11,12 +11,11 @@ import {
   Globe,
   ExternalLink,
   Loader2,
-  Calendar,
   CheckCircle,
-  ChevronRight,
   Compass,
 } from 'lucide-react';
 import api from '../api';
+import { resolveApiUrl } from '../utils/media';
 
 export default function PublicItineraryView() {
   const { tripId } = useParams();
@@ -26,6 +25,10 @@ export default function PublicItineraryView() {
   const [cloneLoading, setCloneLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [cloneSuccess, setCloneSuccess] = useState(false);
+
+  const getImageUrl = (url) => {
+    return resolveApiUrl(url, "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=2000&q=80");
+  };
 
   useEffect(() => {
     const fetchPublicTrip = async () => {
@@ -51,7 +54,7 @@ export default function PublicItineraryView() {
 
     try {
       setCloneLoading(true);
-      const response = await api.post(`/api/trips/${tripId}/clone`);
+      await api.post(`/api/trips/${tripId}/clone`);
       setCloneSuccess(true);
       
       // Auto-redirect to dashboard
@@ -97,7 +100,7 @@ export default function PublicItineraryView() {
       {/* Universal Hero Banner */}
       <section className="relative h-[65vh] min-h-125 w-full overflow-hidden">
         <img 
-          src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=2000&q=80" 
+          src={getImageUrl(trip.image_url)} 
           alt="Banner" 
           className="w-full h-full object-cover"
         />
