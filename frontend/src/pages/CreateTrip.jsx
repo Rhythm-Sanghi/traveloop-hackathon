@@ -94,7 +94,7 @@ const CreateTrip = () => {
     setCoverPreview(item.img);
   };
 
-  // Mock data for suggestions
+  // Static example trip ideas; these are not live search results.
   const suggestions = [
     { id: 1, title: 'Paris, France', category: 'City Lights', img: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&q=80&w=600' },
     { id: 2, title: 'Tokyo Food Tour', category: 'Culinary', img: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&q=80&w=600' },

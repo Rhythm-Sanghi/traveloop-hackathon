@@ -275,7 +275,7 @@ export default function TripNotes() {
                         </div>
                         <div className="flex items-center gap-2">
                            <CheckCircle2 size={12} className="text-green-500/40" />
-                           Verified Scratchpad
+                           Trip notes
                         </div>
                      </div>
                   </div>

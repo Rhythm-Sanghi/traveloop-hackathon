@@ -1,50 +1,32 @@
-# Traveloop: Context-Aware Itinerary and Budget Intelligence
+# Traveloop
 
-Traveloop is a full-stack travel management platform designed to bridge the gap between creative itinerary planning and disciplined financial tracking. Built during a high-stakes hackathon environment, it provides a seamless experience for users to build, manage, and audit their travel plans within a unified, high-performance interface.
+A hackathon app for planning trip stops and tracking planned costs and actual
+expenses. The frontend uses React and Vite; the backend uses FastAPI,
+SQLAlchemy and SQLite.
 
-## Problem Statement
+## Features
 
-Most travel tools are fragmented; users often plan itineraries in one app while tracking expenses in a spreadsheet. This leads to data silos and a lack of real-time visibility into how schedule changes impact the total trip cost. Traveloop solves this by creating a single source of truth where every itinerary stop is a data point in a broader financial model.
+- Create trips and organize day-by-day stops and activities.
+- Compare planned costs with actual expenses by category and currency.
+- Share itineraries, export calendar entries, and keep trip notes.
+- Manage profiles and image uploads with JWT-based authentication.
+- View the last saved trip snapshot in read-only offline Travel Mode.
 
-## Core Functionalities
+The trip-creation page offers static example ideas. Optional place discovery
+uses the configured provider; it is separate from those examples.
 
-### Unified Dashboard
+## Architecture
 
-A centralized hub where users can manage multiple travel projects. Each trip is represented with high-fidelity visual cards and quick-action navigation to specialized planning modules.
-
-### Itinerary Builder
-
-A custom-built interface for day-by-day scheduling. It supports dynamic activity entry, location tagging, and real-time state persistence to ensure no data is lost during the planning process.
-
-### Budget Breakdown and Analytics
-
-A dedicated financial module that aggregates cost data from the itinerary. Using a responsive data visualization engine, it categorizes spending (Food, Transport, Lodging, etc.) and provides a real-time "Remaining vs. Spent" analysis against the user-defined trip limit.
-
-### Profile and Authentication
-
-A secure user management system using JWT-based authentication. Users can manage their personal profiles, including image uploads and account settings, ensuring their travel data remains private and personalized.
-
-## Technical Architecture
-
-### Frontend
-
-* **React and Vite** : Utilized for an optimized development workflow and fast Hot Module Replacement.
-* **Tailwind CSS v4** : Implemented for a custom "Traveloop Dark" design system, utilizing a utility-first approach for responsive and performant styling.
-* **Recharts** : Integrated for the budget visualization layer to provide clear, interactive data insights.
-* **Lucide React** : Used for consistent, scalable iconography across the interface.
-
-### Backend
-
-* **FastAPI (Python)** : Selected for its high performance, asynchronous capabilities, and automatic documentation generation.
-* **SQLAlchemy ORM** : Used for robust database abstraction and relationship management.
-* **SQLite** : Employed as a lightweight, reliable relational database for portable data storage.
-* **Pydantic** : Utilized for strict data validation and type safety between the frontend and backend.
+React Router handles navigation, Tailwind supplies styling, and Recharts
+renders the budget charts. FastAPI exposes the API with Pydantic validation;
+SQLAlchemy models and Alembic migrations manage storage. See
+[architecture](docs/architecture.md) and [deployment](docs/DEPLOYMENT.md).
 
 ## Installation and Setup
 
 ### Prerequisites
 
-* Node.js (v18 or higher)
+* Node.js 22.19+ or 24
 * Python 3.10 or higher
 
 ### Backend Setup
@@ -62,7 +44,7 @@ A secure user management system using JWT-based authentication. Users can manage
 ### Frontend Setup
 
 1. Navigate to the frontend directory: `cd frontend`
-2. Install dependencies: `npm install`
+2. Install dependencies: `npm ci`
 3. Copy `frontend/.env.example` to `.env` and update `VITE_API_BASE_URL` for your backend host.
 4. Start the development server: `npm run dev`
 

@@ -58,3 +58,13 @@ jobs:
         working-directory: frontend
       - run: npm run test:e2e -- --project=desktop --project=desktop-1440 --project=tablet-768 --project=mobile
         working-directory: frontend
+
+      - name: Upload browser test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-reports
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 14
