@@ -30,3 +30,6 @@ __pycache__/
 
 logs/
 *.log
+backend/uploads/
+!.env.example
+!.env.production.example
